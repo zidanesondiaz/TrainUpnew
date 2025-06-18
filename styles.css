@@ -1,0 +1,1206 @@
+/*=============================================
+=            Global Styles & Reset            =
+=============================================*/
+
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Body Styling */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f2f2f2;
+    color: #333;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/*=============================================
+=            Layout Components                =
+=============================================*/
+
+/* Navbar */
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px !important;
+    background-color: #ffffff;
+    position: fixed !important;
+    top: 0;
+    width: 100%;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.navbar.scrolled {
+    background-color: #f8f8f8;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar .left-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.navbar .navbar-links {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+    justify-content: center;
+}
+
+.navbar a {
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.navbar a.active {
+    background-color: #45a049;
+    color: #ffffff;
+    border-color: #45a049;
+}
+
+.navbar a:hover {
+    background-color: #333;
+    color: #fff;
+    border-color: #333;
+}
+
+.navbar .right-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* Hamburger Menu for Mobile */
+.hamburger {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.8em;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+/* Sidebar Dashboard */
+.sidebar {
+    position: fixed;
+    top: 60px; /* Jarak dari navbar */
+    left: 0;
+    width: 300px;
+    height: calc(100vh - 60px); /* Tinggi layar dikurangi tinggi navbar */
+    background-color: #ffffff;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    padding: 20px;
+    z-index: 1002;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto; /* Scroll jika konten melebihi tinggi */
+}
+
+.sidebar.active {
+    transform: translateX(0);
+}
+
+.sidebar h3 {
+    color: #45a049;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateX(-20px);
+    animation: fadeInSlide 0.5s forwards;
+}
+
+.sidebar .form-group {
+    margin-bottom: 15px;
+}
+
+.sidebar .form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.sidebar .form-group input,
+.sidebar .form-group select,
+.sidebar .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    transition: border-color 0.3s ease;
+}
+
+.sidebar .form-group input:focus,
+.sidebar .form-group select:focus,
+.sidebar .form-group textarea:focus {
+    border-color: #45a049;
+    outline: none;
+}
+
+.sidebar .btn-update {
+    padding: 10px;
+    background-color: #45a049;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    width: 100%;
+}
+
+.sidebar .btn-update:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.sidebar .close-sidebar {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: #aaa;
+    transition: color 0.3s ease;
+}
+
+.sidebar .close-sidebar:hover {
+    color: #000;
+}
+
+/* Main Container */
+.container {
+    margin-top: 80px;
+    padding: 20px;
+    flex: 1;
+    width: 100%;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+}
+
+.container.shifted {
+    transform: translateX(150px);
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 20px 0;
+    background-color: #333;
+    color: #fff;
+    font-size: 0.9em;
+    transition: background-color 0.3s ease;
+}
+
+footer:hover {
+    background-color: #444;
+}
+
+/*=============================================
+=            Reusable Components              =
+=============================================*/
+
+/* Search Bar Styling */
+.search-bar-container {
+    margin-bottom: 20px;
+    max-width: 500px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 1em;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #45a049;
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+
+/* Buttons */
+.Log-Out, .Login-Register {
+    padding: 8px 20px;
+    background-color: #45a049;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.Log-Out:hover, .Login-Register:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.profil-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: #45a049;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    width: 120px;
+    height: 40px;
+    cursor: pointer;
+    z-index: 1003;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.profil-toggle-btn:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.action-btn, .hire-btn {
+    padding: 10px 20px;
+    background-color: #45a049;
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.action-btn:hover, .hire-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Overriding hire-btn for specific context if needed */
+.trainer-info .hire-btn {
+    background-color: #28a745;
+    padding: 0.5em 1em;
+    font-size: 1em;
+    margin-right: 10px;
+}
+.trainer-info .hire-btn:hover {
+    background-color: #218838;
+}
+
+
+.gender-icon {
+    font-size: 1.2em;
+}
+.gender-icon.male::before { content: "\2642"; }
+.gender-icon.female::before { content: "\2640";
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"],
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1em;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="email"]:focus,
+.form-group input[type="password"]:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #45a049;
+    outline: none;
+}
+
+.btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #45a049;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    margin-top: 10px;
+}
+
+.btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/*=============================================
+=            Page-Specific Sections           =
+=============================================*/
+
+/* Universal Section Animation */
+.home-section, .program-section, .instructor-section, .benefits-section,
+.trainer-section, .trainer-chosen-section, .payment-section, .schedule-section,
+.scheduleno-section, .scheduleno2-section, .about-contact-feedback-section,
+.consultation-section, .auth-container, .admin-section, .feedback-card,
+.trainup-image-section, .row {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Headers */
+.program-section h2,
+.instructor-section h2,
+.benefits-section h2,
+.schedule-section h2,
+.scheduleno-section h2,
+.scheduleno2-section h2,
+.contact-feedback-section h2,
+.consultation-section h2,
+.admin-section h2 {
+    font-size: 2.5em;
+    color: #45a049;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Home Section */
+.home-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.text-overlay {
+    text-align: center;
+    font-size: 3em;
+    font-weight: bold;
+    font-family: sans-serif;
+    margin-bottom: 20px;
+    animation: fadeInDown 0.6s forwards; /* Add animation */
+    opacity: 0;
+    transform: translateY(-20px);
+}
+.text-overlay .train { color: #000000;
+}
+.text-overlay .up { color: #90ee90; }
+
+.image-section img,
+.instructor-section img,
+.benefits-section img,
+.trainup-image-section img,
+.about-section img.about-image {
+    display: block;
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+    margin: 0 auto 20px auto;
+}
+.image-section img:hover,
+.instructor-section img:hover,
+.benefits-section img:hover,
+.trainup-image-section img:hover,
+.about-section img.about-image:hover {
+    transform: scale(1.02);
+}
+
+.gym-text {
+    margin-top: 20px;
+    font-size: 1.2em;
+    color: #555;
+    text-align: center;
+}
+
+.instructor-section p {
+    font-size: 1.2em;
+    color: #333;
+    line-height: 1.8;
+    margin-bottom: 15px;
+    text-align: justify;
+}
+
+/* Program & Benefits Lists */
+.program-section ul,
+.benefits-section ul {
+    list-style-type: disc;
+    margin: 10px 0;
+    padding-left: 40px;
+}
+.program-section li,
+.benefits-section li {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* Centered Header & Button */
+.centered-header {
+    text-align: center;
+    font-size: 1.5em;
+    color: #333;
+    margin: 20px 0;
+}
+.button-center {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+/* Trainer Section */
+.trainer-section, .trainer-chosen-section {
+    max-width: 1000px;
+    margin: 2em auto;
+    padding: 1em;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.trainer-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.trainer-card {
+    display: flex;
+    flex-direction: column; /* CHANGED: To stack details and schedule */
+    align-items: stretch; /* CHANGED: To make children full-width */
+    padding: 1em;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.trainer-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* NEW: Main part of the trainer card (details + actions) */
+.trainer-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.trainer-details {
+    display: flex;
+    align-items: center;
+}
+.trainer-details img {
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    margin-right: 1em;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+.trainer-details img:hover {
+    transform: scale(1.05);
+}
+.trainer-info h3 { margin: 0; font-size: 1.2em; color: #333; }
+.trainer-info p { margin: 5px 0; font-size: 1em; color: #555;
+}
+
+/* NEW: Container for action buttons */
+.trainer-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* NEW: Button to toggle schedule view */
+.view-schedule-btn {
+    padding: 10px 20px;
+    background-color: #45a049; /* Blue color */
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    margin-left: 10px;
+}
+.view-schedule-btn:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+/* NEW: Container for the schedule, hidden by default */
+.trainer-schedule-details {
+    display: none;
+    width: 100%;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+.trainer-schedule-details.active {
+    display: block;
+}
+.trainer-schedule-details h4 {
+    text-align: center;
+    font-size: 1.5em;
+    color: #45a049;
+    margin-bottom: 15px;
+}
+
+
+/* Payment Section */
+.payment-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.payment-container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+.payment-container:hover { transform: scale(1.02); }
+.payment-container .header h1 { color: #45a049;
+    margin-bottom: 20px; }
+.payment-container .instruction p, .payment-container .amount p { font-size: 1.2em; color: #333; margin-bottom: 20px;
+}
+.payment-container .qris-image img {
+    width: 100%;
+    max-width: 250px;
+    height: auto;
+    margin: 20px auto;
+    transition: transform 0.3s ease;
+}
+.payment-container .qris-image img:hover { transform: scale(1.05); }
+.confirm-btn {
+    background-color: #45a049;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.confirm-btn:hover { background-color: #45a049; transform: translateY(-2px);
+}
+
+/* Schedule Section */
+.schedule-section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px;
+    text-align: center;
+}
+.schedule-table, .schedule-template-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+.schedule-table th, .schedule-table td,
+.schedule-template-table th, .schedule-template-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+}
+.schedule-table th, .schedule-template-table th {
+    background-color: #45a049;
+    color: #fff;
+}
+.edit-btn, .delete-btn {
+    padding: 5px 10px;
+    background-color: #45a049;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.edit-btn:hover, .delete-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Customer Card (Consultation Page) */
+.customer-card {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    text-align: left;
+}
+.customer-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+.customer-card p { font-size: 1em; color: #555; margin-bottom: 10px; line-height: 1.5;
+}
+.customer-card strong { color: #45a049; }
+.whatsapp-button {
+    background-color: #25D366;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.whatsapp-button:hover { background-color: #1ebe57; transform: translateY(-2px);
+}
+
+/* No Schedule Sections */
+.scheduleno-section, .scheduleno2-section {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #ffffff !important;
+    padding: 40px !important;
+    border-radius: 15px !important;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important;
+    max-width: 600px !important;
+    margin: 0 auto !important;
+}
+.scheduleno-section h2, .scheduleno2-section h2 { font-size: 2em !important; }
+.scheduleno-section p, .scheduleno2-section p { font-size: 1.2em !important;
+}
+
+/* About, Contact & Feedback Section */
+.about-contact-feedback-section {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    font-size: 1.2em;
+    color: #333;
+    line-height: 1.8;
+    margin-bottom: 40px;
+    text-align: justify;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+.contact-info {
+    max-width: 1200px;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 30px;
+}
+.contact-item { display: flex; align-items: center; gap: 10px; }
+.contact-logo { width: 30px; height: 30px;
+}
+.feedback-form { display: flex; flex-direction: column; align-items: center; }
+.feedback-form form { width: 100%; max-width: 600px; display: flex; flex-direction: column;
+}
+.feedback-form label { font-weight: bold; margin-bottom: 10px; font-size: 1.1em; }
+.feedback-form textarea {
+    padding: 10px;
+    font-size: 1em;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    resize: vertical;
+    margin-bottom: 15px;
+    width: 100%;
+    transition: border-color 0.3s ease;
+}
+.feedback-form textarea:focus { border-color: #45a049; outline: none; }
+.feedback-form .submit-btn {
+    padding: 10px 20px;
+    background-color: #45a049;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    align-self: center;
+    width: 150px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.feedback-form .submit-btn:hover { background-color: #45a049; transform: translateY(-2px); }
+.feedback-success {
+    font-size: 1.2em;
+    color: #45a049;
+    text-align: center;
+    padding: 20px;
+    background-color: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    border-radius: 5px;
+}
+
+/* Consultation Section */
+.consultation-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 0 auto;
+}
+.consultation-section p { font-size: 1.2em; color: #333; margin-bottom: 20px; text-align: center;
+}
+
+/* Auth Container (Login & Register) */
+.auth-container {
+    max-width: 400px;
+    width: 100%;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin: 100px auto;
+    text-align: center;
+}
+.auth-container h2 { color: #45a049;
+    margin-bottom: 20px; }
+.register-link, .login-link {
+    display: block;
+    margin-top: 15px;
+    color: #45a049;
+    font-weight: bold;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+.register-link:hover, .login-link:hover { color: #45a049; }
+
+/* Admin Section */
+.admin-section {
+    padding: 20px;
+    margin-top: 20px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    max-width: 1200px;
+    margin: 20px auto;
+}
+.admin-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: flex-start;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+.admin-card {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 300px;
+    text-align: left;
+}
+.admin-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+.admin-card p { font-size: 1em;
+    color: #555; margin-bottom: 10px; line-height: 1.5; }
+.admin-card .hapus-btn {
+    background-color: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.admin-card .hapus-btn:hover { background-color: #c0392b; transform: translateY(-2px); }
+
+/* Feedback List Card */
+.feedback-card p { font-size: 1em; color: #555; margin-bottom: 10px;
+    line-height: 1.5; }
+
+/* Row helper */
+.row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 1200px;
+    margin: 20px 0;
+}
+
+
+/*=============================================
+=                   Modals                    =
+=============================================*/
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+}
+.modal.active {
+    display: flex;
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 10px;
+    position: relative;
+}
+
+/* WIDER MODAL FOR AVAILABILITY */
+.modal-content-large {
+    max-width: 800px;
+}
+
+.close {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+.close:hover, .close:focus { color: black; text-decoration: none; }
+.modal-header { text-align: center; margin-bottom: 20px;
+}
+.modal-header h2 { color: #45a049; }
+.modal-body label { display: block; margin-bottom: 5px; font-weight: bold;
+}
+.modal-body input, .modal-body select, .modal-body textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    transition: border-color 0.3s ease;
+}
+.modal-body input:focus, .modal-body select:focus, .modal-body textarea:focus {
+    border-color: #45a049;
+    outline: none;
+}
+.modal-body .submit-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #45a049;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.modal-body .submit-btn:hover { background-color: #45a049; transform: translateY(-2px);
+}
+
+/* Modal Konfirmasi Hapus */
+.delete-confirm-modal .modal-content {
+    max-width: 400px;
+    text-align: center;
+}
+.delete-confirm-modal p {
+    margin-bottom: 20px;
+    font-size: 1.1em;
+}
+.delete-confirm-modal .btn-container {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+.delete-confirm-modal .btn-danger {
+    background-color: #e74c3c;
+}
+.delete-confirm-modal .btn-danger:hover {
+    background-color: #c0392b;
+}
+.delete-confirm-modal .btn-secondary {
+    background-color: #aaa;
+}
+.delete-confirm-modal .btn-secondary:hover {
+    background-color: #888;
+}
+
+/* Add Availability Modal Specifics */
+.availability-day-group {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f9f9;
+}
+.availability-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.availability-day-header h4 {
+    margin: 0;
+    color: #333;
+}
+.btn-add-shift {
+    background-color: #47e433;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8em;
+}
+.btn-add-shift:hover {
+    background-color: #47e433;
+}
+.shift-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.shift-row input {
+    margin-bottom: 0;
+}
+.btn-remove-shift {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    cursor: pointer;
+    font-weight: bold;
+    line-height: 25px;
+    text-align: center;
+}
+.btn-remove-shift:hover {
+    background-color: #c0392b;
+}
+
+
+/* Specific Modals (Edit/Add Schedule) */
+#editModal .modal-content, #addScheduleModal .modal-content {
+    background-color: #fff !important;
+    border-radius: 10px !important;
+    padding: 20px !important;
+    max-width: 500px !important;
+}
+#editModal .modal-header h2, #addScheduleModal .modal-header h2 {
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+#editModal .modal-body label, #addScheduleModal .modal-body label {
+    font-size: 1em;
+    color: #555;
+    font-weight: bold;
+}
+#editModal .modal-body input[type="time"], #editModal .modal-body input[type="text"],
+#addScheduleModal .modal-body input[type="time"], #addScheduleModal .modal-body input[type="text"] {
+    font-size: 1em;
+    color: #333;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+}
+#editModal .modal-body input[type="time"]:focus, #editModal .modal-body input[type="text"]:focus,
+#addScheduleModal .modal-body input[type="time"]:focus, #addScheduleModal .modal-body input[type="text"]:focus {
+    border-color: #45a049;
+    outline: none;
+}
+#editModal .modal-body .submit-btn, #addScheduleModal .modal-body .submit-btn {
+    font-size: 1em;
+    font-weight: bold;
+    background-color: #45a049;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+#editModal .modal-body .submit-btn:hover, #addScheduleModal .modal-body .submit-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/*=============================================
+=                 Animations                  =
+=============================================*/
+
+.content-animate {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInUp 0.5s forwards;
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1;
+    transform: translateY(0); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0);
+} }
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0);
+} }
+@keyframes fadeInSlide { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0);
+} }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0);
+} }
+
+
+/*=============================================
+=              Responsive Design              =
+=============================================*/
+
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: row;
+        align-items: center;
+    }
+    .navbar .navbar-links {
+        flex-direction: column;
+        width: 100%;
+        display: none;
+        position: absolute;
+        background-color: white;
+        left: 0;
+        top: 68px; /* Height of navbar */
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    .navbar .navbar-links.active {
+        display: flex;
+    }
+    .navbar a {
+        width: 100%;
+        text-align: left;
+        padding: 12px 20px;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar .right-section {
+        margin-left: auto;
+        justify-content: flex-end;
+        width: auto;
+        margin-top: 0;
+    }
+    .home-section, .trainer-container, .payment-container, .schedule-section,
+    .about-contact-feedback-section, .program-section, .instructor-section,
+    .benefits-section, .contact-feedback-section, .consultation-section {
+        padding: 20px;
+    }
+    .home-section .text-overlay { font-size: 2.5em; }
+    .gym-text p { font-size: 1em;
+    }
+    .program-section h2, .instructor-section h2, .benefits-section h2,
+    .contact-feedback-section h2, .scheduleno-section h2, .scheduleno2-section h2 {
+        font-size: 2em !important;
+    }
+    
+    .trainer-card-main {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    .trainer-actions {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .hire-btn, .action-btn, .edit-btn, .delete-btn, .view-schedule-btn {
+        margin-top: 0;
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .instructor-section img, .benefits-section img, .about-image {
+        max-width: 100%;
+    }
+    .sidebar { width: 80%; }
+    .profil-toggle-btn { width: 100px; height: 40px; font-size: 0.9em;
+    }
+    .modal-content-large {
+        width: 95%;
+        max-width: 95%;
+    }
+    .shift-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.action-btn + .action-btn {
+    margin-left: 10px; /* Anda bisa sesuaikan jaraknya, misal: 8px atau 0.5rem */
+}

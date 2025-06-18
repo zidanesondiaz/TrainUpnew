@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | TrainUp</title>
+    <!-- External CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Inline CSS -->
+    <style>
+        /* Reset */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Arial', sans-serif; background-color: #f2f2f2; color: #333; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .text-overlay { margin-bottom: -5rem; }
+        .auth-container { max-width: 400px; width: 100%; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; }
+        .auth-container h2 { color: #4CAF50; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1em; transition: border-color 0.3s ease; }
+        .form-group input:focus { border-color: #4CAF50; outline: none; }
+        .btn { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; transition: background-color 0.3s ease, transform 0.3s ease; margin-top: 10px; }
+        .btn:hover { background-color: #45a049; transform: translateY(-2px); }
+        .login-link { display: block; margin-top: 15px; color: #4CAF50; font-weight: bold; text-decoration: none; transition: color 0.3s ease; }
+        .login-link:hover { color: #45a049; }
+
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div aria-live="polite" aria-atomic="true" class="position-relative">
+        <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>
+    </div>
+
+    <!-- TrainUp Overlay Title -->
+    <div class="text-overlay">
+        <span class="train">Train</span><span class="up">Up</span>
+    </div>
+
+    <!-- Authentication Container -->
+    <div class="auth-container">
+        <h2 class="fw-bold text-success mb-3">Login</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" required>
+            </div>
+            <button type="submit" class="btn">Masuk</button>
+        </form>
+        <a href="register.html" class="login-link">Belum punya akun? Daftar di sini</a>
+        <a href="index.html" class="login-link">Kembali ke Halaman Utama</a>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Toast Display Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const message = sessionStorage.getItem('toastMessage');
+            if (message) {
+                const type = sessionStorage.getItem('toastType') || 'success';
+                showLoginToast(message, type);
+                sessionStorage.removeItem('toastMessage');
+                sessionStorage.removeItem('toastType');
+            }
+        });
+
+        function showLoginToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer || typeof bootstrap === 'undefined') return alert(message);
+            const toastId = `toast-${Date.now()}`;
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>`;
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            const bsToast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            bsToast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        }
+    </script>
+
+    <!-- Login AJAX Script -->
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            if (!username || !password) {
+                alert('Username dan Password harus diisi.'); return;
+            }
+            fetch('login.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    sessionStorage.setItem('user', btoa(JSON.stringify(result.user)));
+                    // Setelah login sukses:
+-sessionStorage.setItem('toastMessageOnLoad', 'Login berhasil! Selamat datang, ' + result.user.fullName);
+-sessionStorage.setItem('toastTypeOnLoad', 'success');
++// Simpan ke key yang dibaca login.html
++sessionStorage.setItem('toastMessage', 'Login berhasil! Selamat datang, ' + result.user.fullName);
++sessionStorage.setItem('toastType', 'success');
+                    window.location.href = 'index.html';
+                } else alert(`Login gagal: ${result.message}`);
+            })
+            .catch(() => alert('Terjadi kesalahan saat login. Silakan coba lagi.'));
+        });
+    </script>
+</body>
+</html>

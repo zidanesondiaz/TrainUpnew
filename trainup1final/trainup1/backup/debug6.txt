@@ -1,0 +1,5484 @@
+add_trainer_schedule.php
+(isi)
+<?php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Trainer') {
+    echo json_encode(['success' => false, 'message' => 'Hanya trainer yang dapat menambah jadwal.']);
+    exit;
+}
+
+$trainer_id = $_SESSION['user_id'];
+
+$data = json_decode(file_get_contents('php://input'), true);
+
+// Jika data schedules tidak ada, coba ambil dari field tunggal
+if (!isset($data['schedules']) || !is_array($data['schedules'])) {
+    // Cek apakah mungkin field tunggal sudah diberikan
+    if (isset($data['client_id'], $data['day'], $data['time_start'], $data['time_end'], $data['activity'])) {
+        // Bentuk array schedules dari satu jadwal saja
+        $data['schedules'] = [[
+            'day' => $data['day'],
+            'time_start' => $data['time_start'],
+            'time_end' => $data['time_end'],
+            'activity' => $data['activity']
+        ]];
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Data tidak lengkap atau format salah.']);
+        exit;
+    }
+}
+
+$client_id = intval($data['client_id']);
+
+// Pastikan client ini ditangani oleh trainer yang login
+$stmt = $pdo->prepare("SELECT * FROM user_trainers WHERE user_id = :client_id AND trainer_id = :trainer_id LIMIT 1");
+$stmt->execute(['client_id' => $client_id, 'trainer_id' => $trainer_id]);
+$rel = $stmt->fetch();
+
+if (!$rel) {
+    echo json_encode(['success' => false, 'message' => 'Client ini tidak terhubung dengan Anda.']);
+    exit;
+}
+
+$successCount = 0;
+foreach ($data['schedules'] as $sch) {
+    if (isset($sch['day'], $sch['time_start'], $sch['time_end'], $sch['activity'])) {
+        $day = $sch['day'];
+        $time_start = $sch['time_start'];
+        $time_end = $sch['time_end'];
+        $activity = $sch['activity'];
+
+        $stmt = $pdo->prepare("
+            INSERT INTO trainer_schedules (trainer_id, client_id, day, time_start, time_end, activity, created_at, updated_at)
+            VALUES (:trainer_id, :client_id, :day, :time_start, :time_end, :activity, NOW(), NOW())
+        ");
+        $inserted = $stmt->execute([
+            'trainer_id' => $trainer_id,
+            'client_id' => $client_id,
+            'day' => $day,
+            'time_start' => $time_start,
+            'time_end' => $time_end,
+            'activity' => $activity
+        ]);
+        if ($inserted) {
+            $successCount++;
+        }
+    }
+}
+
+if ($successCount == count($data['schedules'])) {
+    echo json_encode(['success' => true, 'message' => 'Semua jadwal berhasil ditambahkan.']);
+} else if ($successCount > 0) {
+    echo json_encode(['success' => false, 'message' => 'Beberapa jadwal gagal ditambahkan.']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Gagal menambahkan jadwal.']);
+}
+
+
+daftar_masukan.php
+(isi)
+<?php
+// daftar_masukan.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login dan memiliki peran Admin
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu sebagai Admin.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+
+    if (!$current_user || $current_user['role'] !== 'Admin') {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak memiliki izin untuk mengakses halaman ini.']);
+        exit;
+    }
+
+    // Ambil semua feedback beserta informasi pengguna
+    $stmt = $pdo->query("
+        SELECT feedback.id, feedback.feedback, feedback.created_at, users.fullName, users.username, users.role
+        FROM feedback
+        LEFT JOIN users ON feedback.user_id = users.id
+        ORDER BY feedback.created_at DESC
+    ");
+    $feedbacks = $stmt->fetchAll();
+
+    echo json_encode(['success' => true, 'feedbacks' => $feedbacks]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil data feedback.']);
+}
+?>
+
+
+db.php
+(isi)
+<?php
+// db.php
+
+$host = 'localhost';       // Ganti jika host berbeda
+$db   = 'trainup';         // Nama database
+$user = 'root';            // Username MySQL
+$pass = '';                // Password MySQL
+$charset = 'utf8mb4';
+
+$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION, // Error handling
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,       // Fetch mode
+    PDO::ATTR_EMULATE_PREPARES   => false,                  // Disable emulation
+];
+
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+} catch (\PDOException $e) {
+    // Jika koneksi gagal, tampilkan pesan error
+    throw new \PDOException($e->getMessage(), (int)$e->getCode());
+}
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', '/path/to/php-error.log');
+
+?>
+
+
+debug.py
+(isi)
+import os
+
+def read_and_backup_files():
+    # Folder untuk menyimpan backup
+    backup_folder = "backup"
+    os.makedirs(backup_folder, exist_ok=True)  # Buat folder jika belum ada
+
+    # Cari nama file backup berikutnya
+    counter = 1
+    while True:
+        backup_file = os.path.join(backup_folder, f"debug{counter}.txt")
+        if not os.path.exists(backup_file):
+            break
+        counter += 1
+
+    # Ambil file di folder yang sama dengan script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    files_in_dir = [f for f in os.listdir(script_dir) if os.path.isfile(os.path.join(script_dir, f))]
+
+    # Buat isi file backup
+    content = []
+    for file_name in files_in_dir:
+        try:
+            with open(file_name, 'r', encoding='utf-8') as f:
+                file_content = f.read()
+            content.append(f"{file_name}\n(isi)\n{file_content}\n")
+        except Exception as e:
+            # Jika file tidak bisa dibaca (binary atau error), tulis pesan error
+            content.append(f"{file_name}\n(isi)\n[ERROR: {str(e)}]\n")
+
+    # Simpan isi ke file backup
+    with open(backup_file, 'w', encoding='utf-8') as f:
+        f.write("\n".join(content))
+    
+    print(f"Backup berhasil disimpan di {backup_file}")
+
+if __name__ == "__main__":
+    read_and_backup_files()
+
+
+edit_trainer_schedule.php
+(isi)
+<?php
+// edit_trainer_schedule.php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Trainer') {
+    echo json_encode(['success' => false, 'message' => 'Hanya trainer yang dapat mengubah jadwal.']);
+    exit;
+}
+
+$trainer_id = $_SESSION['user_id'];
+
+$data = json_decode(file_get_contents('php://input'), true);
+
+if (!isset($data['id'], $data['time_start'], $data['time_end'], $data['activity'])) {
+    echo json_encode(['success' => false, 'message' => 'Data tidak lengkap.']);
+    exit;
+}
+
+$id = intval($data['id']);
+$day = isset($data['day']) ? $data['day'] : null; // Bisa null
+$time_start = $data['time_start'];
+$time_end = $data['time_end'];
+$activity = $data['activity'];
+
+// Pastikan jadwal ini milik trainer yang login
+$stmt = $pdo->prepare("SELECT trainer_id, day FROM trainer_schedules WHERE id = :id");
+$stmt->execute(['id' => $id]);
+$schedule = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$schedule || $schedule['trainer_id'] != $trainer_id) {
+    echo json_encode(['success' => false, 'message' => 'Anda tidak berhak mengubah jadwal ini.']);
+    exit;
+}
+
+// Jika day null, gunakan day yang lama
+if ($day === null) {
+    $day = $schedule['day'];
+}
+
+$stmt = $pdo->prepare("
+    UPDATE trainer_schedules
+    SET day = :day, time_start = :time_start, time_end = :time_end, activity = :activity, updated_at = NOW()
+    WHERE id = :id
+");
+
+$updated = $stmt->execute([
+    'day' => $day,
+    'time_start' => $time_start,
+    'time_end' => $time_end,
+    'activity' => $activity,
+    'id' => $id
+]);
+
+if ($updated) {
+    echo json_encode(['success' => true, 'message' => 'Jadwal berhasil diubah.']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Gagal mengubah jadwal.']);
+}
+
+
+get_assigned_trainer.php
+(isi)
+<?php
+// get_assigned_trainer.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu.']);
+    exit;
+}
+
+if (!isset($_GET['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'User ID tidak diberikan.']);
+    exit;
+}
+
+$user_id = intval($_GET['user_id']);
+
+try {
+    // Ambil trainer yang ditugaskan ke user
+    $stmt = $pdo->prepare("
+        SELECT users.id, users.fullName
+        FROM user_trainers
+        JOIN users ON user_trainers.trainer_id = users.id
+        WHERE user_trainers.user_id = :user_id
+        LIMIT 1
+    ");
+    $stmt->execute(['user_id' => $user_id]);
+    $trainer = $stmt->fetch();
+
+    if ($trainer) {
+        echo json_encode(['success' => true, 'trainer' => $trainer]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Tidak ada trainer yang ditugaskan.']);
+    }
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil trainer.']);
+}
+?>
+
+
+get_customer_contact.php
+(isi)
+<?php
+// get_customer_contact.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login dan memiliki peran Trainer
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu sebagai Trainer.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+
+    if (!$current_user || $current_user['role'] !== 'Trainer') {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak memiliki izin untuk mengakses halaman ini.']);
+        exit;
+    }
+
+    // Cek apakah user_id diberikan
+    if (!isset($_GET['user_id'])) {
+        echo json_encode(['success' => false, 'message' => 'User ID tidak diberikan.']);
+        exit;
+    }
+
+    $user_id = intval($_GET['user_id']);
+
+    // Ambil kontak pelanggan
+    $stmt = $pdo->prepare("SELECT email, contact FROM users WHERE id = :id");
+    $stmt->execute(['id' => $user_id]);
+    $contact = $stmt->fetch();
+
+    if ($contact) {
+        echo json_encode(['success' => true, 'contact' => $contact]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Pelanggan tidak ditemukan.']);
+    }
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil kontak pelanggan.']);
+}
+?>
+
+
+get_trainers.php
+(isi)
+<?php
+// get_trainers.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu.']);
+    exit;
+}
+
+try {
+    // Ambil semua trainer
+    $stmt = $pdo->prepare("SELECT id, fullName FROM users WHERE role = 'Trainer'");
+    $stmt->execute();
+    $trainers = $stmt->fetchAll();
+
+    echo json_encode(['success' => true, 'trainers' => $trainers]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil daftar trainer.']);
+}
+?>
+
+
+get_trainer_schedule.php
+(isi)
+<?php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu.']);
+    exit;
+}
+
+$user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['user_role'];
+$trainer_id_param = isset($_GET['trainer_id']) ? intval($_GET['trainer_id']) : null;
+$client_id_param = isset($_GET['client_id']) ? intval($_GET['client_id']) : null;
+
+if ($user_role === 'Client') {
+    // Ambil trainer yang terhubung dengan client ini
+    $stmt = $pdo->prepare("SELECT trainer_id FROM user_trainers WHERE user_id = :user_id LIMIT 1");
+    $stmt->execute(['user_id' => $user_id]);
+    $rel = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$rel) {
+        // Client belum punya trainer
+        echo json_encode(['success' => true, 'schedules' => []]);
+        exit;
+    }
+    $trainer_id = $rel['trainer_id'];
+
+    // Hanya tampilkan jadwal untuk client ini saja
+    $stmt = $pdo->prepare("
+        SELECT ts.*, u.fullName AS trainer_name
+        FROM trainer_schedules ts
+        JOIN users u ON u.id = ts.trainer_id
+        WHERE ts.trainer_id = :trainer_id
+        AND ts.client_id = :client_id
+        ORDER BY FIELD(day, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), time_start
+    ");
+    $stmt->execute(['trainer_id' => $trainer_id, 'client_id' => $user_id]);
+    $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode(['success' => true, 'schedules' => $schedules]);
+    exit;
+
+} elseif ($user_role === 'Trainer') {
+    // Jika ada client_id di GET, ambil jadwal client tersebut
+    if ($client_id_param) {
+        $stmt = $pdo->prepare("
+            SELECT ts.*, c.fullName AS client_name
+            FROM trainer_schedules ts
+            JOIN users c ON c.id = ts.client_id
+            WHERE ts.trainer_id = :trainer_id AND ts.client_id = :client_id
+            ORDER BY FIELD(day, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), time_start
+        ");
+        $stmt->execute(['trainer_id' => $user_id, 'client_id' => $client_id_param]);
+    } else {
+        // Ambil semua jadwal milik trainer ini
+        $stmt = $pdo->prepare("
+            SELECT ts.*, c.fullName AS client_name
+            FROM trainer_schedules ts
+            JOIN users c ON c.id = ts.client_id
+            WHERE ts.trainer_id = :trainer_id
+            ORDER BY FIELD(day, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), time_start
+        ");
+        $stmt->execute(['trainer_id' => $user_id]);
+    }
+
+    $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['success' => true, 'schedules' => $schedules]);
+    exit;
+
+} elseif ($user_role === 'Admin') {
+    if ($trainer_id_param) {
+        $stmt = $pdo->prepare("
+            SELECT ts.*, u.fullName AS trainer_name, c.fullName AS client_name
+            FROM trainer_schedules ts
+            JOIN users u ON u.id = ts.trainer_id
+            JOIN users c ON c.id = ts.client_id
+            WHERE ts.trainer_id = :trainer_id
+            ORDER BY FIELD(day, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), time_start
+        ");
+        $stmt->execute(['trainer_id' => $trainer_id_param]);
+    } else {
+        $stmt = $pdo->query("
+            SELECT ts.*, u.fullName AS trainer_name, c.fullName AS client_name
+            FROM trainer_schedules ts
+            JOIN users u ON u.id = ts.trainer_id
+            JOIN users c ON c.id = ts.client_id
+            ORDER BY FIELD(day, 'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'), time_start
+        ");
+    }
+
+    $schedules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['success' => true, 'schedules' => $schedules]);
+    exit;
+
+} else {
+    echo json_encode(['success' => false, 'message' => 'Role tidak dikenali.']);
+    exit;
+}
+
+
+get_user.php
+(isi)
+<?php
+// get_user.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+if (isset($_SESSION['user_id'])) {
+    try {
+        // Ambil data pengguna berdasarkan sesi
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE id = :id");
+        $stmt->execute(['id' => $_SESSION['user_id']]);
+        $user = $stmt->fetch();
+
+        if ($user) {
+            $user_data = [
+                'id' => $user['id'],
+                'fullName' => $user['fullName'],
+                'username' => $user['username'],
+                'gender' => $user['gender'],
+                'email' => $user['email'],
+                'contact' => $user['contact'],
+                'programGoals' => $user['programGoals'],
+                'medicalHistory' => $user['medicalHistory'],
+                'role' => $user['role']
+            ];
+
+            // Jika pengguna adalah Trainer, tambahkan deskripsi dan spesialisasi
+            if ($user['role'] === 'Trainer') {
+                $user_data['specialization'] = $user['specialization'];
+                $user_data['experience'] = $user['experience'];
+                $user_data['description'] = $user['description'];
+            }
+
+            // Jika pengguna adalah Client, ambil trainer yang ditugaskan
+            if ($user['role'] === 'Client') {
+                $stmt = $pdo->prepare("SELECT u.id, u.fullName FROM user_trainers ut JOIN users u ON ut.trainer_id = u.id WHERE ut.user_id = :user_id");
+                $stmt->execute(['user_id' => $user['id']]);
+                $trainer = $stmt->fetch();
+                if ($trainer) {
+                    $user_data['trainer'] = [
+                        'id' => $trainer['id'],
+                        'fullName' => $trainer['fullName']
+                    ];
+                } else {
+                    $user_data['trainer'] = null;
+                }
+            }
+
+            echo json_encode(['success' => true, 'user' => $user_data]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Pengguna tidak ditemukan.']);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil data pengguna.']);
+    }
+} else {
+    echo json_encode(['success' => false, 'message' => 'Anda belum login.']);
+}
+?>
+
+
+get_users.php
+(isi)
+<?php
+// get_users.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah permintaan adalah GET
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+try {
+    // Ambil semua pengguna dari database
+    $stmt = $pdo->query("SELECT * FROM users");
+    $users = $stmt->fetchAll();
+
+    // Hapus password dari setiap pengguna
+    foreach ($users as &$user) {
+        unset($user['password']);
+    }
+
+    echo json_encode(['success' => true, 'users' => $users]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil data pengguna.']);
+}
+?>
+
+
+hapus_jadwal.php
+(isi)
+<?php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if(!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Trainer') {
+    echo json_encode(['success' => false, 'message' => 'Hanya trainer yang dapat menghapus jadwal.']);
+    exit;
+}
+
+$trainer_id = $_SESSION['user_id'];
+
+$data = json_decode(file_get_contents('php://input'), true);
+
+if(!isset($data['schedule_id'])) {
+    echo json_encode(['success' => false, 'message' => 'ID jadwal tidak ditemukan.']);
+    exit;
+}
+
+$schedule_id = intval($data['schedule_id']);
+
+// Pastikan jadwal ini milik trainer yang sedang login
+$stmt = $pdo->prepare("SELECT trainer_id FROM trainer_schedules WHERE id = :id");
+$stmt->execute(['id' => $schedule_id]);
+$schedule = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$schedule) {
+    echo json_encode(['success' => false, 'message' => 'Jadwal tidak ditemukan.']);
+    exit;
+}
+
+if ($schedule['trainer_id'] != $trainer_id) {
+    echo json_encode(['success' => false, 'message' => 'Anda tidak berhak menghapus jadwal ini.']);
+    exit;
+}
+
+// Hapus jadwal
+$stmt = $pdo->prepare("DELETE FROM trainer_schedules WHERE id = :id");
+$deleted = $stmt->execute(['id' => $schedule_id]);
+
+if ($deleted) {
+    echo json_encode(['success' => true, 'message' => 'Jadwal berhasil dihapus.']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Gagal menghapus jadwal.']);
+}
+
+
+hapus_semua_jadwal.php
+(isi)
+<?php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if(!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Trainer') {
+    echo json_encode(['success' => false, 'message' => 'Hanya trainer yang dapat menghapus jadwal.']);
+    exit;
+}
+
+$trainer_id = $_SESSION['user_id'];
+$data = json_decode(file_get_contents('php://input'), true);
+
+if(!isset($data['client_id'])) {
+    echo json_encode(['success' => false, 'message' => 'ID client tidak ditemukan.']);
+    exit;
+}
+
+$client_id = intval($data['client_id']);
+
+// Pastikan jadwal-jadwal ini milik trainer yang sedang login
+$stmt = $pdo->prepare("SELECT COUNT(*) as total FROM trainer_schedules WHERE trainer_id = :trainer_id AND client_id = :client_id");
+$stmt->execute(['trainer_id' => $trainer_id, 'client_id' => $client_id]);
+$count = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if ($count['total'] == 0) {
+    echo json_encode(['success' => false, 'message' => 'Tidak ada jadwal untuk client ini atau anda tidak berhak menghapusnya.']);
+    exit;
+}
+
+// Hapus semua jadwal client ini yang dimiliki trainer ini
+$stmt = $pdo->prepare("DELETE FROM trainer_schedules WHERE trainer_id = :trainer_id AND client_id = :client_id");
+$deleted = $stmt->execute(['trainer_id' => $trainer_id, 'client_id' => $client_id]);
+
+if ($deleted) {
+    echo json_encode(['success' => true, 'message' => 'Semua jadwal untuk client ini berhasil dihapus.']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Gagal menghapus semua jadwal.']);
+}
+
+
+hapus_user.php
+(isi)
+<?php
+// hapus_user.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login dan memiliki peran Admin
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu sebagai Admin.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+
+    if (!$current_user || $current_user['role'] !== 'Admin') {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak memiliki izin untuk mengakses halaman ini.']);
+        exit;
+    }
+
+    // Cek apakah permintaan adalah POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+        exit;
+    }
+
+    // Ambil data JSON dari permintaan
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input || !isset($input['user_id'])) {
+        echo json_encode(['success' => false, 'message' => 'Data user tidak valid.']);
+        exit;
+    }
+
+    $user_id = intval($input['user_id']);
+
+    // Jangan izinkan Admin menghapus dirinya sendiri
+    if ($user_id === $_SESSION['user_id']) {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak dapat menghapus akun Anda sendiri.']);
+        exit;
+    }
+
+    // Hapus pengguna
+    $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
+    $stmt->execute(['id' => $user_id]);
+
+    echo json_encode(['success' => true, 'message' => 'Pengguna berhasil dihapus.']);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat menghapus pengguna.']);
+}
+?>
+
+
+index.html
+(isi)
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrainUp</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+    <link
+  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+  rel="stylesheet"
+  integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+</head>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"
+  integrity="sha384-oBqDVmMz9ATKxIep9tiCxS/Z9fNfEXiDAYTujMAeBAsjFuCZSmKbSSUnQlmh/jp3" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"
+  integrity="sha384-fbbOQedDUMZZ5KreZpsbe1LCZPVmfTnH7ois6mU1QK+m14rQ1l2bGBq41eYeM/fS" crossorigin="anonymous"></script>
+<body>
+    <!-- Container untuk Bootstrap Toast -->
+<div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
+
+    <!-- Navbar Section -->
+    <div id="navbar-container"></div>
+
+    <!-- Sidebar Dashboard -->
+    <div id="sidebarDashboard" class="sidebar">
+        <span class="close-sidebar" onclick="toggleSidebar()">&times;</span>
+        <h3>Dashboard</h3>
+        <form id="dashboardForm" onsubmit="updateDashboard(event)">
+            <div class="form-group">
+                <label for="dashboardFullName">Nama Lengkap</label>
+                <input type="text" id="dashboardFullName" name="fullName" readonly>
+            </div>
+            <div class="form-group">
+                <label for="dashboardUsername">Username</label>
+                <input type="text" id="dashboardUsername" name="username" readonly>
+            </div>
+            <div class="form-group">
+                <label for="dashboardGender">Jenis Kelamin</label>
+                <input type="text" id="dashboardGender" name="gender" readonly>
+            </div>
+            <div class="form-group">
+                <label for="dashboardEmail">Email</label>
+                <input type="email" id="dashboardEmail" name="email" readonly>
+            </div>
+            <div class="form-group">
+                <label for="dashboardContact">Kontak</label>
+                <input type="text" id="dashboardContact" name="contact" required>
+            </div>
+            <div class="form-group">
+                <label for="dashboardProgramGoals">Program Capaian</label>
+                <input type="text" id="dashboardProgramGoals" name="programGoals" required>
+            </div>
+            <div class="form-group">
+                <label for="dashboardMedicalHistory">Riwayat Penyakit</label>
+                <input type="text" id="dashboardMedicalHistory" name="medicalHistory">
+            </div>
+            <div id="trainerSection" class="form-group">
+                <label for="trainerSelect">Pilih Trainer</label>
+                <select id="trainerSelect" name="trainer_id">
+                    <option value="" disabled selected>Pilih Trainer</option>
+                </select>
+            </div>
+            <button type="submit" class="btn-update">Perbarui Informasi</button>
+        </form>
+    </div>
+
+    <!-- Main Content Section -->
+    <div class="container">
+        <div id="content" class="content-animate">
+            <!-- Konten dinamis akan dimuat melalui script.js -->
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2025 TrainUp. Semua hak dilindungi.</p>
+    </footer>
+</body>
+</html>
+
+
+insert_trainer_schedule.php
+(isi)
+<?php
+session_start();
+header('Content-Type: application/json');
+require 'db.php';
+
+if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'Trainer') {
+    echo json_encode(['success' => false, 'message' => 'Akses ditolak. Hanya trainer yang bisa menambahkan jadwal.']);
+    exit;
+}
+
+$trainer_id = $_SESSION['user_id'];
+
+// Ambil data dari POST
+$data = json_decode(file_get_contents("php://input"), true);
+
+if (!isset($data['client_id'], $data['day'], $data['time_start'], $data['time_end'], $data['start_date'], $data['end_date'])) {
+    echo json_encode(['success' => false, 'message' => 'Data tidak lengkap.']);
+    exit;
+}
+
+$client_id = $data['client_id'];
+$day = $data['day']; // Contoh: "Senin"
+$time_start = $data['time_start']; // Contoh: "08:00"
+$time_end = $data['time_end'];     // Contoh: "10:00"
+$start_date = new DateTime($data['start_date']);
+$end_date = new DateTime($data['end_date']);
+
+// Validasi hari (opsional, bisa dihapus jika yakin input benar)
+$valid_days = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+if (!in_array($day, $valid_days)) {
+    echo json_encode(['success' => false, 'message' => 'Hari tidak valid.']);
+    exit;
+}
+
+// Generate tanggal-tanggal sesuai hari yang dipilih
+$interval = new DateInterval('P1D');
+$period = new DatePeriod($start_date, $interval, $end_date->modify('+1 day')); // termasuk end_date
+
+$inserted = 0;
+foreach ($period as $date) {
+    if (strftime('%A', strtotime($date->format('Y-m-d'))) == $day) {
+        // Format ke versi Indonesia
+        $hariIndonesia = date('N', strtotime($date->format('Y-m-d')));
+        $namaHari = $valid_days[$hariIndonesia - 1];
+
+        $stmt = $pdo->prepare("
+            INSERT INTO trainer_schedules (trainer_id, client_id, day, time_start, time_end)
+            VALUES (:trainer_id, :client_id, :day, :time_start, :time_end)
+        ");
+        $stmt->execute([
+            'trainer_id' => $trainer_id,
+            'client_id' => $client_id,
+            'day' => $namaHari,
+            'time_start' => $time_start,
+            'time_end' => $time_end
+        ]);
+        $inserted++;
+    }
+}
+
+echo json_encode(['success' => true, 'message' => "$inserted jadwal berhasil ditambahkan."]);
+
+
+kelola_trainer_user.php
+(isi)
+<?php
+// kelola_trainer_user.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login dan memiliki peran Admin
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu sebagai Admin.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+
+    if (!$current_user || $current_user['role'] !== 'Admin') {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak memiliki izin untuk mengakses halaman ini.']);
+        exit;
+    }
+
+    // Ambil semua Trainer dan User
+    $stmt = $pdo->query("SELECT id, fullName, username, email, contact, role FROM users");
+    $users = $stmt->fetchAll();
+
+    echo json_encode(['success' => true, 'users' => $users]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil data pengguna.']);
+}
+?>
+
+
+konsultasi_pelanggan.php
+(isi)
+<?php
+// konsultasi_pelanggan.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login dan memiliki peran Trainer
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu sebagai Trainer.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $current_user = $stmt->fetch();
+
+    if (!$current_user || $current_user['role'] !== 'Trainer') {
+        echo json_encode(['success' => false, 'message' => 'Anda tidak memiliki izin untuk mengakses halaman ini.']);
+        exit;
+    }
+
+    // Ambil daftar pelanggan yang terkait dengan Trainer
+    $stmt = $pdo->prepare("
+        SELECT users.id, users.fullName, users.username, users.email, users.contact, user_trainers.assigned_at
+        FROM user_trainers
+        JOIN users ON user_trainers.user_id = users.id
+        WHERE user_trainers.trainer_id = :trainer_id
+    ");
+    $stmt->execute(['trainer_id' => $_SESSION['user_id']]);
+    $customers = $stmt->fetchAll();
+
+    echo json_encode(['success' => true, 'customers' => $customers]);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat mengambil data pelanggan.']);
+}
+
+
+login.html
+(isi)
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | TrainUp</title>
+    <!-- External CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Inline CSS -->
+    <style>
+        /* Reset */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Arial', sans-serif; background-color: #f2f2f2; color: #333; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .text-overlay { margin-bottom: -5rem; }
+        .auth-container { max-width: 400px; width: 100%; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; }
+        .auth-container h2 { color: #4CAF50; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1em; transition: border-color 0.3s ease; }
+        .form-group input:focus { border-color: #4CAF50; outline: none; }
+        .btn { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 1em; cursor: pointer; transition: background-color 0.3s ease, transform 0.3s ease; margin-top: 10px; }
+        .btn:hover { background-color: #45a049; transform: translateY(-2px); }
+        .login-link { display: block; margin-top: 15px; color: #4CAF50; font-weight: bold; text-decoration: none; transition: color 0.3s ease; }
+        .login-link:hover { color: #45a049; }
+
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div aria-live="polite" aria-atomic="true" class="position-relative">
+        <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>
+    </div>
+
+    <!-- TrainUp Overlay Title -->
+    <div class="text-overlay">
+        <span class="train">Train</span><span class="up">Up</span>
+    </div>
+
+    <!-- Authentication Container -->
+    <div class="auth-container">
+        <h2 class="fw-bold text-success mb-3">Login</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" name="password" required>
+            </div>
+            <button type="submit" class="btn">Masuk</button>
+        </form>
+        <a href="register.html" class="login-link">Belum punya akun? Daftar di sini</a>
+        <a href="index.html" class="login-link">Kembali ke Halaman Utama</a>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Toast Display Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const message = sessionStorage.getItem('toastMessage');
+            if (message) {
+                const type = sessionStorage.getItem('toastType') || 'success';
+                showLoginToast(message, type);
+                sessionStorage.removeItem('toastMessage');
+                sessionStorage.removeItem('toastType');
+            }
+        });
+
+        function showLoginToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer || typeof bootstrap === 'undefined') return alert(message);
+            const toastId = `toast-${Date.now()}`;
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>`;
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            const bsToast = new bootstrap.Toast(toastElement, { delay: 3000 });
+            bsToast.show();
+            toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+        }
+    </script>
+
+    <!-- Login AJAX Script -->
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            if (!username || !password) {
+                alert('Username dan Password harus diisi.'); return;
+            }
+            fetch('login.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    sessionStorage.setItem('user', btoa(JSON.stringify(result.user)));
+                    sessionStorage.setItem('toastMessage', 'Login berhasil! Selamat datang, ' + result.user.fullName);
+                    sessionStorage.setItem('toastType', 'success');
+                    window.location.href = 'index.html';
+                } else alert(`Login gagal: ${result.message}`);
+            })
+            .catch(() => alert('Terjadi kesalahan saat login. Silakan coba lagi.'));
+        });
+    </script>
+</body>
+</html>
+
+
+login.php
+(isi)
+<?php
+// login.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+// Ambil data JSON dari permintaan
+$input = json_decode(file_get_contents('php://input'), true);
+
+if (!$input) {
+    echo json_encode(['success' => false, 'message' => 'Invalid JSON data.']);
+    exit;
+}
+
+// Validasi data yang diperlukan
+$required_fields = ['username', 'password'];
+foreach ($required_fields as $field) {
+    if (empty($input[$field])) {
+        echo json_encode(['success' => false, 'message' => ucfirst($field) . ' harus diisi.']);
+        exit;
+    }
+}
+
+$username = strtolower(trim($input['username']));
+$password = trim($input['password']);
+
+try {
+    // Cari pengguna berdasarkan username
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = :username");
+    $stmt->execute(['username' => $username]);
+    $user = $stmt->fetch();
+
+    if ($user && password_verify($password, $user['password'])) {
+        // Password cocok, set sesi
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_role'] = $user['role']; // Set user_role di sesi server
+
+        // Ambil informasi pengguna
+        $user_data = [
+            'id' => $user['id'],
+            'fullName' => $user['fullName'],
+            'username' => $user['username'],
+            'gender' => $user['gender'],
+            'email' => $user['email'],
+            'contact' => $user['contact'],
+            'programGoals' => $user['programGoals'],
+            'medicalHistory' => $user['medicalHistory'],
+            'role' => $user['role']
+        ];
+
+        // Jika pengguna adalah Trainer, tambahkan deskripsi dan spesialisasi
+        if ($user['role'] === 'Trainer') {
+            $user_data['specialization'] = $user['specialization'];
+            $user_data['experience'] = $user['experience'];
+            $user_data['description'] = $user['description'];
+        }
+
+        // Jika pengguna adalah Client, ambil trainer yang ditugaskan
+        if ($user['role'] === 'Client') {
+            $stmt = $pdo->prepare("SELECT u.id, u.fullName FROM user_trainers ut JOIN users u ON ut.trainer_id = u.id WHERE ut.user_id = :user_id");
+            $stmt->execute(['user_id' => $user['id']]);
+            $trainer = $stmt->fetch();
+            if ($trainer) {
+                $user_data['trainer'] = [
+                    'id' => $trainer['id'],
+                    'fullName' => $trainer['fullName']
+                ];
+            } else {
+                $user_data['trainer'] = null;
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Login berhasil.', 'user' => $user_data]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Username atau password salah.']);
+    }
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat login.']);
+}
+
+
+logout.html
+(isi)
+<!-- logout.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+    <meta charset="UTF-8">
+    <title>Logout | TrainUp</title>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Mengirim permintaan logout ke server
+            fetch('logout.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    // Hapus data user dari sessionStorage
+                    sessionStorage.removeItem('user');
+                    // Redirect ke login.html
+                    window.location.href = 'login.html';
+                } else {
+                    alert('Gagal logout: ' + result.message);
+                    window.location.href = 'index.html';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat logout.');
+                window.location.href = 'index.html';
+            });
+        });
+    </script>
+</head>
+<body>
+    <p>Logout...</p>
+</body>
+</html>
+
+
+logout.php
+(isi)
+<?php
+// logout.php
+session_start();
+
+// Periksa apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Hapus semua data sesi
+    session_unset();
+    session_destroy();
+    
+    // Kirim respons JSON
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'message' => 'Logout berhasil.']);
+} else {
+    // Jika bukan POST, alihkan ke halaman login
+    header('Location: login.html');
+    exit;
+}
+?>
+
+
+regadmin.html
+(isi)
+<!-- regadmin.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrasi Admin | TrainUp</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+</head>
+<body>
+
+    <!-- Registrasi Admin Container -->
+    <div class="auth-container">
+        <h2>Registrasi Admin</h2>
+        <form id="regadminForm">
+            <div class="form-group">
+                <label for="adminFullName">Nama Lengkap</label>
+                <input type="text" id="adminFullName" name="fullName" required>
+            </div>
+            <div class="form-group">
+                <label for="adminUsername">Username</label>
+                <input type="text" id="adminUsername" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="adminGender">Jenis Kelamin</label>
+                <select id="adminGender" name="gender" required>
+                    <option value="" disabled selected>Pilih Jenis Kelamin</option>
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="adminEmail">Email</label>
+                <input type="email" id="adminEmail" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="adminContact">Kontak</label>
+                <input type="text" id="adminContact" name="contact" required>
+            </div>
+            <div class="form-group">
+                <label for="adminProgramGoals">Program Capaian</label>
+                <input type="text" id="adminProgramGoals" name="programGoals" required>
+            </div>
+            <div class="form-group">
+                <label for="adminMedicalHistory">Riwayat Penyakit</label>
+                <input type="text" id="adminMedicalHistory" name="medicalHistory" placeholder="Tidak ada">
+            </div>
+            <div class="form-group">
+                <label for="adminPassword">Password</label>
+                <input type="password" id="adminPassword" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="adminConfirmPassword">Konfirmasi Password</label>
+                <input type="password" id="adminConfirmPassword" name="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn">Daftar Admin</button>
+        </form>
+        <!-- Link to Login -->
+        <a href="login.html" class="login-link">Sudah punya akun? Masuk di sini</a>
+    </div>
+
+    <script>
+        // Handle Admin Registration Form Submission
+        document.getElementById('regadminForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fullName = document.getElementById('adminFullName').value.trim();
+            const username = document.getElementById('adminUsername').value.trim();
+            const gender = document.getElementById('adminGender').value;
+            const email = document.getElementById('adminEmail').value.trim();
+            const contact = document.getElementById('adminContact').value.trim();
+            const programGoals = document.getElementById('adminProgramGoals').value.trim();
+            const medicalHistory = document.getElementById('adminMedicalHistory').value.trim();
+            const password = document.getElementById('adminPassword').value.trim();
+            const confirmPassword = document.getElementById('adminConfirmPassword').value.trim();
+
+            if (password !== confirmPassword) {
+                alert('Password dan Konfirmasi Password tidak cocok!');
+                return;
+            }
+
+            // Registrasi admin via AJAX
+            const data = {
+                fullName,
+                username,
+                gender,
+                email,
+                contact,
+                programGoals,
+                medicalHistory,
+                password,
+                confirmPassword,
+                role: 'Admin' // Menentukan role sebagai Admin
+            };
+
+            fetch('regadmin.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('Registrasi Admin berhasil! Silakan login.');
+                    window.location.href = 'login.html';
+                } else {
+                    alert(`Registrasi gagal: ${result.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat registrasi. Silakan coba lagi.');
+            });
+
+            return false;
+        });
+    </script>
+
+</body>
+</html>
+
+
+regadmin.php
+(isi)
+<?php
+// regadmin.php
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah ada admin yang sudah terdaftar
+try {
+    $stmt = $pdo->query("SELECT COUNT(*) as admin_count FROM users WHERE role = 'Admin'");
+    $result = $stmt->fetch();
+    if ($result['admin_count'] > 0) {
+        echo json_encode(['success' => false, 'message' => 'Admin sudah terdaftar.']);
+        exit;
+    }
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat memeriksa keberadaan admin.']);
+    exit;
+}
+
+// Cek apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+// Ambil data JSON dari permintaan
+$input = json_decode(file_get_contents('php://input'), true);
+
+if (!$input) {
+    echo json_encode(['success' => false, 'message' => 'Invalid JSON data.']);
+    exit;
+}
+
+// Validasi data yang diperlukan
+$required_fields = ['fullName', 'username', 'gender', 'email', 'contact', 'programGoals', 'password'];
+foreach ($required_fields as $field) {
+    if (empty($input[$field])) {
+        echo json_encode(['success' => false, 'message' => ucfirst($field) . ' harus diisi.']);
+        exit;
+    }
+}
+
+// Validasi role
+if (!isset($input['role']) || $input['role'] !== 'Admin') {
+    echo json_encode(['success' => false, 'message' => 'Role harus Admin.']);
+    exit;
+}
+
+$fullName = trim($input['fullName']);
+$username = strtolower(trim($input['username']));
+$gender = trim($input['gender']);
+$email = trim($input['email']);
+$contact = trim($input['contact']);
+$programGoals = trim($input['programGoals']);
+$medicalHistory = isset($input['medicalHistory']) ? trim($input['medicalHistory']) : 'Tidak ada';
+$password = trim($input['password']);
+
+// Cek apakah password dan confirmPassword cocok
+if (isset($input['confirmPassword'])) {
+    $confirmPassword = trim($input['confirmPassword']);
+    if ($password !== $confirmPassword) {
+        echo json_encode(['success' => false, 'message' => 'Password dan Konfirmasi Password tidak cocok.']);
+        exit;
+    }
+}
+
+// Hash password
+$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+try {
+    // Cek apakah username atau email sudah digunakan
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = :username OR email = :email");
+    $stmt->execute(['username' => $username, 'email' => $email]);
+    if ($stmt->fetch()) {
+        echo json_encode(['success' => false, 'message' => 'Username atau Email sudah digunakan.']);
+        exit;
+    }
+
+    // Siapkan data admin baru
+    $new_admin = [
+        'fullName' => $fullName,
+        'username' => $username,
+        'gender' => $gender,
+        'email' => $email,
+        'contact' => $contact,
+        'programGoals' => $programGoals,
+        'medicalHistory' => $medicalHistory,
+        'password' => $hashedPassword,
+        'role' => 'Admin'
+    ];
+
+    // Buat query INSERT
+    $columns = array_keys($new_admin);
+    $placeholders = array_map(function($col) { return ':' . $col; }, $columns);
+    $sql = "INSERT INTO users (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($new_admin);
+
+    echo json_encode(['success' => true, 'message' => 'Registrasi Admin berhasil. Silakan login.']);
+} catch (Exception $e) {
+    // Tangani error
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat registrasi Admin.']);
+}
+?>
+
+
+register.html
+(isi)
+<!-- register.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrasi | TrainUp</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+</head>
+<body>
+
+    <!-- Registration Container -->
+    <div class="auth-container">
+        <h2>Registrasi</h2>
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="registerFullName">Nama Lengkap</label>
+                <input type="text" id="registerFullName" name="fullName" required>
+            </div>
+            <div class="form-group">
+                <label for="registerUsername">Username</label>
+                <input type="text" id="registerUsername" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="registerGender">Jenis Kelamin</label>
+                <select id="registerGender" name="gender" required>
+                    <option value="" disabled selected>Pilih Jenis Kelamin</option>
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                    <!-- Opsi "Lainnya" dihapus -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="registerEmail">Email</label>
+                <input type="email" id="registerEmail" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="registerContact">Kontak</label>
+                <input type="text" id="registerContact" name="contact" required>
+            </div>
+            <div class="form-group">
+                <label for="registerProgramGoals">Program Capaian</label>
+                <input type="text" id="registerProgramGoals" name="programGoals" required>
+            </div>
+            <div class="form-group">
+                <label for="registerMedicalHistory">Riwayat Penyakit</label>
+                <input type="text" id="registerMedicalHistory" name="medicalHistory" placeholder="Tidak ada">
+            </div>
+            <div class="form-group">
+                <label for="registerPassword">Password</label>
+                <input type="password" id="registerPassword" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="registerConfirmPassword">Konfirmasi Password</label>
+                <input type="password" id="registerConfirmPassword" name="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn">Daftar</button>
+        </form>
+        <!-- Link to Login -->
+        <a href="login.html" class="login-link">Sudah punya akun? Masuk di sini</a>
+        <a href="registertrainer.html" class="register-link">Daftar sebagai Trainer</a>
+    </div>
+
+    <script>
+        // Handle Registration Form Submission
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fullName = document.getElementById('registerFullName').value.trim();
+            const username = document.getElementById('registerUsername').value.trim();
+            const gender = document.getElementById('registerGender').value;
+            const email = document.getElementById('registerEmail').value.trim();
+            const contact = document.getElementById('registerContact').value.trim();
+            const programGoals = document.getElementById('registerProgramGoals').value.trim();
+            const medicalHistory = document.getElementById('registerMedicalHistory').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+            const confirmPassword = document.getElementById('registerConfirmPassword').value.trim();
+
+            if (password !== confirmPassword) {
+                alert('Password dan Konfirmasi Password tidak cocok!');
+                return;
+            }
+
+            // Simulasi pendaftaran via AJAX
+            const data = {
+                fullName,
+                username,
+                gender,
+                email,
+                contact,
+                programGoals,
+                medicalHistory,
+                password
+            };
+
+            fetch('register.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('Registrasi berhasil! Silakan login.');
+                    window.location.href = 'login.html';
+                } else {
+                    alert(`Registrasi gagal: ${result.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat registrasi. Silakan coba lagi.');
+            });
+
+            return false;
+        });
+    </script>
+
+</body>
+</html>
+
+
+register.php
+(isi)
+<?php
+// register.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Fungsi Validasi Email
+function isValidEmail($email) {
+    return filter_var($email, FILTER_VALIDATE_EMAIL);
+}
+
+// Cek apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+// Ambil data JSON dari permintaan
+$input = json_decode(file_get_contents('php://input'), true);
+
+if (!$input) {
+    echo json_encode(['success' => false, 'message' => 'Invalid JSON data.']);
+    exit;
+}
+
+// Validasi data yang diperlukan
+$required_fields = ['fullName', 'username', 'gender', 'email', 'contact', 'programGoals', 'password'];
+foreach ($required_fields as $field) {
+    if (empty($input[$field])) {
+        echo json_encode(['success' => false, 'message' => ucfirst($field) . ' harus diisi.']);
+        exit;
+    }
+}
+
+// Validasi email
+if (!isValidEmail($input['email'])) {
+    echo json_encode(['success' => false, 'message' => 'Email tidak valid.']);
+    exit;
+}
+
+$fullName = trim($input['fullName']);
+$username = strtolower(trim($input['username']));
+$gender = trim($input['gender']);
+$email = trim($input['email']);
+$contact = trim($input['contact']);
+$programGoals = trim($input['programGoals']);
+$medicalHistory = isset($input['medicalHistory']) ? trim($input['medicalHistory']) : 'Tidak ada';
+$password = trim($input['password']);
+
+// Cek apakah password dan confirmPassword cocok (jika ada)
+if (isset($input['confirmPassword'])) {
+    $confirmPassword = trim($input['confirmPassword']);
+    if ($password !== $confirmPassword) {
+        echo json_encode(['success' => false, 'message' => 'Password dan Konfirmasi Password tidak cocok.']);
+        exit;
+    }
+}
+
+// Hash password
+$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+// Tentukan peran (role)
+$role = isset($input['role']) ? trim($input['role']) : 'Client';
+if (!in_array($role, ['Client', 'Trainer', 'Admin'])) {
+    $role = 'Client'; // Default role
+}
+
+try {
+    // Cek apakah username atau email sudah digunakan
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = :username OR email = :email");
+    $stmt->execute(['username' => $username, 'email' => $email]);
+    if ($stmt->fetch()) {
+        echo json_encode(['success' => false, 'message' => 'Username atau Email sudah digunakan.']);
+        exit;
+    }
+
+    // Siapkan data pengguna baru
+    $new_user = [
+        'fullName' => $fullName,
+        'username' => $username,
+        'gender' => $gender,
+        'email' => $email,
+        'contact' => $contact,
+        'programGoals' => $programGoals,
+        'medicalHistory' => $medicalHistory,
+        'password' => $hashedPassword,
+        'role' => $role
+    ];
+
+    if ($role === 'Trainer') {
+        $new_user['specialization'] = isset($input['specialization']) ? trim($input['specialization']) : 'Spesialisasi belum diisi.';
+        $new_user['experience'] = isset($input['experience']) ? intval($input['experience']) : 0;
+        $new_user['description'] = isset($input['description']) ? trim($input['description']) : 'Deskripsi belum diisi.';
+    }
+
+    // Buat query INSERT
+    $columns = array_keys($new_user);
+    $placeholders = array_map(function($col) { return ':' . $col; }, $columns);
+    $sql = "INSERT INTO users (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($new_user);
+
+    echo json_encode(['success' => true, 'message' => 'Registrasi berhasil. Silakan login.']);
+} catch (Exception $e) {
+    // Tangani error
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat registrasi.']);
+}
+?>
+
+
+registertrainer.html
+(isi)
+<!-- registertrainer.html -->
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrasi Trainer | TrainUp</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+</head>
+<body>
+
+    <!-- Registration Trainer Container -->
+    <div class="auth-container">
+        <h2>Registrasi Trainer</h2>
+        <form id="registerTrainerForm">
+            <div class="form-group">
+                <label for="trainerFullName">Nama Lengkap</label>
+                <input type="text" id="trainerFullName" name="fullName" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerUsername">Username</label>
+                <input type="text" id="trainerUsername" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerGender">Jenis Kelamin</label>
+                <select id="trainerGender" name="gender" required>
+                    <option value="" disabled selected>Pilih Jenis Kelamin</option>
+                    <option value="Laki-laki">Laki-laki</option>
+                    <option value="Perempuan">Perempuan</option>
+                    <!-- Opsi "Lainnya" dihapus -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="trainerEmail">Email</label>
+                <input type="email" id="trainerEmail" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerContact">Kontak</label>
+                <input type="text" id="trainerContact" name="contact" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerProgramGoals">Program Capaian</label>
+                <input type="text" id="trainerProgramGoals" name="programGoals" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerMedicalHistory">Riwayat Penyakit</label>
+                <input type="text" id="trainerMedicalHistory" name="medicalHistory" placeholder="Tidak ada">
+            </div>
+            <div class="form-group">
+                <label for="trainerSpecialization">Spesialisasi</label>
+                <input type="text" id="trainerSpecialization" name="specialization" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerExperience">Pengalaman (dalam tahun)</label>
+                <input type="number" id="trainerExperience" name="experience" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerPassword">Password</label>
+                <input type="password" id="trainerPassword" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="trainerConfirmPassword">Konfirmasi Password</label>
+                <input type="password" id="trainerConfirmPassword" name="confirmPassword" required>
+            </div>
+            <button type="submit" class="btn">Daftar</button>
+        </form>
+        <!-- Link to Login -->
+        <a href="login.html" class="login-link">Sudah punya akun? Masuk di sini</a>
+    </div>
+
+    <script>
+        // Handle Registration Trainer Form Submission
+        document.getElementById('registerTrainerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const fullName = document.getElementById('trainerFullName').value.trim();
+            const username = document.getElementById('trainerUsername').value.trim();
+            const gender = document.getElementById('trainerGender').value;
+            const email = document.getElementById('trainerEmail').value.trim();
+            const contact = document.getElementById('trainerContact').value.trim();
+            const programGoals = document.getElementById('trainerProgramGoals').value.trim();
+            const medicalHistory = document.getElementById('trainerMedicalHistory').value.trim();
+            const specialization = document.getElementById('trainerSpecialization').value.trim();
+            const experience = parseInt(document.getElementById('trainerExperience').value.trim());
+            const password = document.getElementById('trainerPassword').value.trim();
+            const confirmPassword = document.getElementById('trainerConfirmPassword').value.trim();
+
+            if (password !== confirmPassword) {
+                alert('Password dan Konfirmasi Password tidak cocok!');
+                return;
+            }
+
+            // Simulasi pendaftaran via AJAX
+            const data = {
+                fullName,
+                username,
+                gender,
+                email,
+                contact,
+                programGoals,
+                medicalHistory,
+                specialization,
+                experience,
+                password,
+                confirmPassword,
+                role: 'Trainer' // Menentukan role sebagai Trainer
+            };
+
+            fetch('register.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    alert('Registrasi Trainer berhasil! Silakan login.');
+                    window.location.href = 'login.html';
+                } else {
+                    alert(`Registrasi gagal: ${result.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Terjadi kesalahan saat registrasi. Silakan coba lagi.');
+            });
+
+            return false;
+        });
+    </script>
+
+</body>
+</html>
+
+
+save_feedback.php
+(isi)
+<?php
+// save_feedback.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+// Ambil data JSON atau POST data
+$input = json_decode(file_get_contents('php://input'), true);
+
+// Jika data tidak tersedia dalam JSON, coba ambil dari POST
+if (!$input) {
+    $input = $_POST;
+}
+
+if (!isset($input['feedback']) || empty(trim($input['feedback']))) {
+    echo json_encode(['success' => false, 'message' => 'Feedback tidak boleh kosong.']);
+    exit;
+}
+
+$feedback = trim($input['feedback']);
+$user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
+
+try {
+    // Insert feedback ke database
+    $stmt = $pdo->prepare("INSERT INTO feedback (user_id, feedback) VALUES (:user_id, :feedback)");
+    $stmt->execute([
+        'user_id' => $user_id,
+        'feedback' => $feedback
+    ]);
+
+    echo json_encode(['success' => true, 'message' => 'Feedback berhasil disimpan.']);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat menyimpan feedback.']);
+}
+?>
+
+
+script.js
+(isi)
+// script.js
+
+document.addEventListener("DOMContentLoaded", () => {
+    const navbarContainer = document.getElementById("navbar-container");
+    const contentContainer = document.getElementById("content");
+    let currentClientId = null; // Untuk menyimpan client_id saat melihat jadwal khusus client
+
+    function encryptData(data) {
+        return btoa(JSON.stringify(data));
+    }
+
+    function decryptData(data) {
+        try {
+            return JSON.parse(atob(data));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getLoggedInUser() {
+        const encryptedUser = sessionStorage.getItem('user');
+        if (encryptedUser) {
+            return decryptData(encryptedUser);
+        }
+        return null;
+    }
+
+    // === RENDER NAVBAR DENGAN HAMBURGER UNTUK MOBILE ===
+    function renderNavbar() {
+        const user = getLoggedInUser();
+
+        let linksHtml;
+        if (user) {
+            if (user.role === 'Admin') {
+                linksHtml = `
+                    <a href="javascript:navigate('home')" id="nav-home" class="active">Home</a>
+                    <a href="javascript:navigate('trainer_manage')" id="nav-trainer_manage">Kelola Trainer & User</a>
+                    <a href="javascript:navigate('feedback_list')" id="nav-feedback_list">Daftar Masukan</a>
+                    <a href="javascript:navigate('schedule')" id="nav-schedule">Jadwal Latihan</a>
+                    <a href="javascript:navigate('about')" id="nav-about">Tentang</a>
+                `;
+            } else if (user.role === 'Trainer') {
+                linksHtml = `
+                    <a href="javascript:navigate('home')" id="nav-home" class="active">Home</a>
+                    <a href="javascript:navigate('schedule')" id="nav-schedule">Jadwal Latihan (Semua)</a>
+                    <a href="javascript:navigate('consultation_pelanggan')" id="nav-consultation_pelanggan">Konsultasi Pelanggan</a>
+                    <a href="javascript:navigate('about')" id="nav-about">Tentang</a>
+                `;
+            } else {
+                linksHtml = `
+                    <a href="javascript:navigate('home')" id="nav-home" class="active">Home</a>
+                    <a href="javascript:navigate('trainer')" id="nav-trainer">Trainer Gym</a>
+                    <a href="javascript:navigate('schedule')" id="nav-schedule">Jadwal Latihan</a>
+                    <a href="javascript:navigate('trainer_schedule')" id="nav-trainer_schedule">Jadwal Trainer</a>
+                    <a href="javascript:handleConsultation()" id="nav-consultation">Konsultasi</a>
+                    <a href="javascript:navigate('about')" id="nav-about">Tentang</a>
+                `;
+            }
+        } else {
+            linksHtml = `
+                <a href="javascript:navigate('home')" id="nav-home" class="active">Home</a>
+                <a href="javascript:navigate('about')" id="nav-about">Tentang</a>
+            `;
+        }
+
+        // Bangun struktur navbar
+        navbarContainer.innerHTML = `
+            <div class="navbar">
+                <div class="left-section">
+                    <button id="navToggle" class="hamburger">☰</button>
+                    <button class="profil-toggle-btn" onclick="toggleSidebar()">
+                        <span id="gender-icon" class="gender-icon"></span> Profil
+                    </button>
+                </div>
+                <div class="navbar-links">
+                    ${linksHtml}
+                </div>
+                <div class="right-section">
+                    ${user
+                        ? `<span>${user.fullName} (${user.role})</span>
+                           <button id="logoutButton" class="Log-Out">Log Out</button>`
+                        : `<a href="login.html" class="Login-Register">Login</a>`}
+                </div>
+            </div>
+        `;
+
+        // Setup hamburger toggle
+        const navToggle = document.getElementById('navToggle');
+        const navLinks  = document.querySelector('.navbar-links');
+        navToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+        });
+
+        // Setup logout
+        const logoutButton = document.getElementById('logoutButton');
+if (logoutButton) {
+    logoutButton.addEventListener('click', () => {
+        fetch('logout.php', { method: 'POST', headers: {'Content-Type':'application/json'} })
+            .then(res => res.json())
+            .then(result => {
+                if (result.success) {
+                    // ================= PERUBAHAN DI SINI =================
+                    // Hapus data user dari sesi saat ini
+                    sessionStorage.removeItem('user');
+                    
+                    // Siapkan pesan untuk ditampilkan di halaman login
+                    sessionStorage.setItem('toastMessageOnLoad', 'Logout berhasil.');
+                    sessionStorage.setItem('toastTypeOnLoad', 'success');
+
+                    // Langsung redirect ke halaman login TANPA DELAY
+                    window.location.href = 'login.html';
+                    // =======================================================
+                } else {
+                    // Jika logout dari server gagal, tampilkan toast di halaman ini (index.html)
+                    showToast('Gagal logout: ' + result.message, 'danger');
+                }
+            })
+            .catch(() => showToast('Terjadi kesalahan saat logout.', 'danger'));
+    });
+}
+
+        // Set gender icon
+        const genderIcon = document.getElementById('gender-icon');
+        if (genderIcon && user) {
+            if (user.gender === 'Laki-laki') genderIcon.classList.add('male');
+            else if (user.gender === 'Perempuan') genderIcon.classList.add('female');
+            else genderIcon.textContent = '♂♀';
+        }
+    }
+
+    function verifySession() {
+        return fetch('get_user.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.user) {
+                    sessionStorage.setItem('user', encryptData(data.user));
+                } else {
+                    sessionStorage.removeItem('user');
+                }
+            })
+            .catch(error => {
+                console.error('Error verifying session:', error);
+                sessionStorage.removeItem('user');
+            });
+    }
+
+    window.navigate = function (page, params = {}) {
+        document.querySelectorAll(".navbar a").forEach(link => link.classList.remove("active"));
+        const activeLink = document.getElementById(`nav-${page}`);
+        if (activeLink) activeLink.classList.add("active");
+
+        contentContainer.classList.remove("content-animate");
+        setTimeout(() => contentContainer.classList.add("content-animate"), 10);
+
+        if (params.client_id) {
+            currentClientId = params.client_id;
+        } else {
+            currentClientId = null;
+        }
+
+        switch (page) {
+            case "home":
+                renderHomePage();
+                break;
+            case "trainer":
+                renderTrainerPage();
+                break;
+            case "trainer_schedule":
+                renderTrainerSchedule();
+                break;
+            case "trainer_manage":
+                renderTrainerManagePage();
+                break;
+            case "feedback_list":
+                renderFeedbackListPage();
+                break;
+            case "consultation_pelanggan":
+                renderConsultationPelangganPage();
+                break;
+            case "consultation":
+                renderConsultationPage();
+                break;
+            case "payment":
+                renderPaymentPage();
+                break;
+            case "schedule":
+                renderSchedulePage();
+                break;
+            case "about":
+                renderAboutPage();
+                break;
+            case "admin":
+                renderAdminPage();
+                break;
+            case "client_schedule":
+                renderClientSchedulePage(currentClientId);
+                break;
+            default:
+                contentContainer.innerHTML = `<h1>404 - Page Not Found</h1>`;
+        }
+    };
+    // FUNGSI UNTUK MEMBUKA MODAL TAMBAH JADWAL TRAINER
+window.openAddTrainerAvailabilityModal = function () {
+    const existingModal = document.getElementById('addTrainerAvailabilityModal');
+    if (existingModal) existingModal.remove();
+
+    const daysOfWeek = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+    let rows = '';
+    daysOfWeek.forEach(day => {
+        rows += `
+            <tr>
+                <td><input type="checkbox" class="day-check" data-day="${day}"></td>
+                <td>${day}</td>
+                <td><input type="time" class="time-start" disabled></td>
+                <td><input type="time" class="time-end" disabled></td>
+                <td><input type="text" class="description" placeholder="cth: Sesi Pagi, Istirahat" disabled></td>
+            </tr>
+        `;
+    });
+
+    const modalHtml = `
+        <div class="modal" id="addTrainerAvailabilityModal" style="display:flex;">
+            <div class="modal-content">
+                <span class="close" onclick="document.getElementById('addTrainerAvailabilityModal').remove()">&times;</span>
+                <h2>Tambah Jadwal Ketersediaan</h2>
+                <p>Pilih hari, lalu isi waktu dan deskripsi ketersediaan Anda.</p>
+                <form onsubmit="return submitAddTrainerAvailability(event)">
+                    <table class="schedule-template-table">
+                        <thead><tr><th>Pilih</th><th>Hari</th><th>Mulai</th><th>Selesai</th><th>Deskripsi</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    <button type="submit" class="submit-btn">Simpan Jadwal</button>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Event listener untuk enable/disable input berdasarkan checkbox
+    document.querySelectorAll('#addTrainerAvailabilityModal .day-check').forEach(check => {
+        check.addEventListener('change', (e) => {
+            const row = e.target.closest('tr');
+            const inputs = row.querySelectorAll('input:not([type=checkbox])');
+            inputs.forEach(input => input.disabled = !e.target.checked);
+            if (!e.target.checked) {
+                inputs.forEach(input => input.value = '');
+            }
+        });
+    });
+};
+
+// FUNGSI UNTUK SUBMIT JADWAL BARU DARI MODAL
+window.submitAddTrainerAvailability = function(event) {
+    event.preventDefault();
+    const rows = document.querySelectorAll('#addTrainerAvailabilityModal tbody tr');
+    const schedules = [];
+
+    rows.forEach(row => {
+        const checkbox = row.querySelector('.day-check');
+        if (checkbox.checked) {
+            schedules.push({
+                day: checkbox.getAttribute('data-day'),
+                time_start: row.querySelector('.time-start').value,
+                time_end: row.querySelector('.time-end').value,
+                description: row.querySelector('.description').value.trim()
+            });
+        }
+    });
+
+    if (schedules.length === 0) {
+        showToast('Pilih setidaknya satu hari dan isi jadwalnya.', 'warning'); // MODIFIED
+        return false;
+    }
+
+    fetch('add_trainer_availability.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedules })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Jadwal berhasil disimpan!', 'success'); // MODIFIED
+            document.getElementById('addTrainerAvailabilityModal').remove();
+            navigate('trainer_schedule'); // Refresh halaman
+        } else {
+            showToast('Gagal menyimpan: ' + data.message, 'danger'); // MODIFIED
+        }
+    })
+    .catch(error => console.error('Error:', error));
+    return false;
+};
+
+// FUNGSI UNTUK MEMBUKA MODAL EDIT JADWAL TRAINER
+window.openEditTrainerAvailabilityModal = function(id, time_start, time_end, description) {
+    const existingModal = document.getElementById('editTrainerAvailabilityModal');
+    if (existingModal) existingModal.remove();
+
+    const modalHtml = `
+        <div class="modal" id="editTrainerAvailabilityModal" style="display:flex;">
+            <div class="modal-content">
+                <span class="close" onclick="document.getElementById('editTrainerAvailabilityModal').remove()">&times;</span>
+                <h2>Edit Jadwal</h2>
+                <form onsubmit="return submitEditTrainerAvailability(event, ${id})">
+                    <label>Waktu Mulai:</label>
+                    <input type="time" id="editAvailTimeStart" value="${time_start}">
+                    <label>Waktu Selesai:</label>
+                    <input type="time" id="editAvailTimeEnd" value="${time_end}">
+                    <label>Deskripsi:</label>
+                    <input type="text" id="editAvailDesc" value="${description}" placeholder="cth: Sesi Pagi">
+                    <button type="submit" class="submit-btn">Simpan Perubahan</button>
+                </form>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+};
+
+// FUNGSI UNTUK SUBMIT EDIT JADWAL
+window.submitEditTrainerAvailability = function(event, id) {
+    event.preventDefault();
+    const payload = {
+        id: id,
+        time_start: document.getElementById('editAvailTimeStart').value,
+        time_end: document.getElementById('editAvailTimeEnd').value,
+        description: document.getElementById('editAvailDesc').value
+    };
+
+    fetch('edit_trainer_availability.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Jadwal berhasil diupdate.', 'success'); // MODIFIED
+            document.getElementById('editTrainerAvailabilityModal').remove();
+            navigate('trainer_schedule');
+        } else {
+            showToast('Gagal mengupdate: ' + data.message, 'danger'); // MODIFIED
+        }
+    })
+    .catch(error => console.error('Error:', error));
+    return false;
+};
+
+// FUNGSI UNTUK HAPUS JADWAL
+window.deleteTrainerAvailability = function(id) {
+    if (confirm('Apakah Anda yakin ingin menghapus jadwal ini?')) {
+        fetch('delete_trainer_availability.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Jadwal berhasil dihapus.', 'success'); // MODIFIED
+                navigate('trainer_schedule');
+            } else {
+                showToast('Gagal menghapus: ' + data.message, 'danger'); // MODIFIED
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+};
+
+    // Fungsi untuk Render Halaman Home
+    function renderHomePage() {
+        const user = getLoggedInUser();
+        contentContainer.innerHTML = `
+            <div class="home-section">
+                <div class="trainup-image-section">
+                    <div class="text-overlay">
+                        <span class="train">Train</span><span class="up">Up</span>
+                    </div>
+                    <div class="image-section">
+                        <img src="PIC/GYM3.png" alt="Fitness Gym">
+                    </div>
+                    <div class="gym-text">
+                        <p>Selamat datang di TrainUp, tempat terbaik untuk mencapai kebugaran dan kesehatan Anda!</p>
+                    </div>
+                </div>
+
+                <div class="program-section">
+                    <h2>Program Latihan yang Tersedia</h2>
+                    <ul>
+                        <li><strong>Latihan Kekuatan:</strong> Fokus pada pengembangan otot melalui latihan dengan beban. Program ini ideal bagi mereka yang ingin meningkatkan massa otot dan kekuatan.</li>
+                        <li><strong>Latihan Kardio:</strong> Dirancang untuk meningkatkan stamina dan kesehatan jantung. Program ini meliputi aktivitas seperti berlari, bersepeda, dan latihan kardio lainnya.</li>
+                        <li><strong>HIIT (High-Intensity Interval Training):</strong> Latihan intensitas tinggi dengan waktu istirahat singkat, cocok untuk pembakaran kalori secara cepat.</li>
+                    </ul>
+                </div>
+
+                <div class="instructor-section">
+                    <img src="PIC/home3.png" alt="Instruktur Kami">
+                    <h2>Trainer Kami</h2>
+                    <p>Tim Trainer kami terdiri dari para profesional yang berpengalaman dan terlatih dalam berbagai jenis latihan. Trainer kami akan membantu Anda menyesuaikan program latihan sesuai kebutuhan dan kemampuan Anda. Mereka selalu siap memberikan bimbingan dan memastikan Anda mendapatkan hasil terbaik.</p>
+                    <h3 class="centered-header">Pilih Trainer Anda Sekarang</h3>
+                    <div class="button-center">
+                        <a href="${user ? "javascript:navigate('trainer')" : "login.html"}" class="action-btn">
+                            ${user ? "Pilih Trainer Anda" : "Login sekarang untuk memilih trainer"}
+                        </a>
+                    </div>
+                </div>
+
+                <div class="benefits-section">
+                    <img src="PIC/home4.png" alt="Manfaat Latihan di Gym">
+                    <h2>Manfaat Latihan di Gym</h2>
+                    <ul>
+                        <li><strong>Meningkatkan Kebugaran Fisik:</strong> Latihan rutin membantu meningkatkan kekuatan dan stamina tubuh.</li>
+                        <li><strong>Menjaga Berat Badan Ideal:</strong> Program latihan kardio dan HIIT dapat membantu membakar kalori dan menjaga berat badan yang sehat.</li>
+                        <li><strong>Meningkatkan Kesehatan Mental:</strong> Latihan fisik dapat mengurangi stres dan meningkatkan suasana hati.</li>
+                        <li><strong>Meningkatkan Kualitas Hidup:</strong> Kebugaran yang baik akan meningkatkan energi dan produktivitas sehari-hari.</li>
+                    </ul>
+                </div>
+            </div>`;
+    }
+
+    function renderTrainerPage() {
+        const user = getLoggedInUser(); 
+        fetch("get_users.php")
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success && data.users) {
+                    const trainers = data.users.filter((u) => u.role === "Trainer");
+                    if (user && user.role === 'Client' && user.trainer && user.trainer.id) {
+                        const chosenTrainer = trainers.find((t) => t.id == user.trainer.id);
+                        if (chosenTrainer) {
+                            contentContainer.innerHTML = `
+                                <div class="trainer-chosen-section">
+                                    <header>
+                                        <h1>Trainer Anda</h1>
+                                    </header>
+                                    <div class="trainer-card">
+                                        <div class="trainer-details">
+                                            <img src="PIC/${chosenTrainer.gender === "Laki-laki" ? "pria.jpg" : "wanita.jpg"}" alt="${chosenTrainer.fullName}">
+                                            <div class="trainer-info">
+                                                <h3>${chosenTrainer.fullName}</h3>
+                                                <p>Jenis Kelamin: ${chosenTrainer.gender}</p>
+                                                <p>Spesialisasi: ${chosenTrainer.specialization}</p>
+                                                <p>Pengalaman: ${chosenTrainer.experience} tahun</p>
+                                                <p>Deskripsi: ${chosenTrainer.description}</p>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="action-btn" onclick="redirectToConsultation()">Hubungi ${chosenTrainer.fullName}</button>
+                                        <button type="button" class="action-btn" onclick="removeTrainer()">Hapus Trainer</button>
+                                    </div>
+                                </div>
+                            `;
+                            return;
+                        }
+                    }
+
+                    let trainerCards = "";
+                    trainers.forEach((trainer) => {
+                        trainerCards += `
+                            <div class="trainer-card">
+                                <div class="trainer-details">
+                                    <img src="PIC/${trainer.gender === "Laki-laki" ? "pria.jpg" : "wanita.jpg"}" alt="${trainer.fullName}">
+                                    <div class="trainer-info">
+                                        <h3>${trainer.fullName}</h3>
+                                        <p>Jenis Kelamin: ${trainer.gender}</p>
+                                        <p>Spesialisasi: ${trainer.specialization}</p>
+                                        <p>Pengalaman: ${trainer.experience} tahun</p>
+                                        <p>Deskripsi: ${trainer.description}</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="hire-btn" data-id="${trainer.id}" data-name="${trainer.fullName}">
+                                    ${user ? "Pilih Trainer" : "Login untuk pilih Trainer"}
+                                </button>
+                            </div>`;
+                    });
+
+                    let contentHtml = `
+                        <div class="trainer-section">
+                            <header>
+                                <h1>Pilih Trainer Anda</h1>
+                            </header>
+                            <div class="trainer-container">
+                                ${trainerCards || "<p>Belum ada trainer yang terdaftar.</p>"}
+                            </div>
+                        </div>`;
+
+                    contentContainer.innerHTML = contentHtml;
+                    
+                    document.querySelectorAll(".hire-btn").forEach((button) => {
+                        button.addEventListener("click", () => {
+                            const trainerId = button.getAttribute("data-id");
+                            const trainerName = button.getAttribute("data-name");
+                            const user = getLoggedInUser();
+                            if (user) {
+                                initiatePayment(trainerId, trainerName);
+                            } else {
+                                promptLogin();
+                            }
+                        });
+                    });
+                } else {
+                    contentContainer.innerHTML = "<p>Gagal memuat data trainer.</p>";
+                }
+            })
+            .catch((error) => {
+                console.error("Error:", error);
+                contentContainer.innerHTML = "<p>Terjadi kesalahan saat memuat data trainer.</p>";
+            });
+    }
+
+    function renderTrainerManagePage() {
+        fetch('kelola_trainer_user.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.users) {
+                    let userCards = '';
+
+                    data.users.forEach(user => {
+                        userCards += 
+                            `<div class="admin-card">
+                                <p><strong>Nama:</strong> ${user.fullName}</p>
+                                <p><strong>Username:</strong> ${user.username}</p>
+                                <p><strong>Email:</strong> ${user.email}</p>
+                                <p><strong>Kontak:</strong> ${user.contact}</p>
+                                <p><strong>Role:</strong> ${user.role}</p>
+                                <button type="button" class="hapus-btn" onclick="hapusUser(${user.id})">Hapus</button>
+                            </div>`;
+                    });
+
+                    contentContainer.innerHTML = 
+                        `<div class="admin-section">
+                            <h2>Kelola Trainer & User</h2>
+                            <div class="admin-container">
+                                ${userCards || '<p>Belum ada pengguna yang terdaftar.</p>'}
+                            </div>
+                        </div>`;
+                } else {
+                    contentContainer.innerHTML = `<p>Gagal memuat data pengguna.</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat data pengguna.</p>`;
+            });
+    }
+
+    window.hapusUser = function(userId) {
+        if (confirm('Apakah Anda yakin ingin menghapus pengguna ini?')) {
+            fetch('hapus_user.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: userId })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('Pengguna berhasil dihapus.', 'success'); // MODIFIED
+                    navigate('trainer_manage');
+                } else {
+                    showToast(`Gagal menghapus pengguna: ${result.message}`, 'danger'); // MODIFIED
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Terjadi kesalahan saat menghapus pengguna.', 'danger'); // MODIFIED
+            });
+        }
+    };
+
+    function renderFeedbackListPage() {
+        fetch('daftar_masukan.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.feedbacks) {
+                    let feedbackCards = '';
+
+                    data.feedbacks.forEach(feedback => {
+                        feedbackCards += 
+                            `<div class="feedback-card">
+                                <p><strong>Dari:</strong> ${feedback.fullName ? `${feedback.fullName} (${feedback.username})` : 'Anonim'}</p>
+                                <p><strong>Role:</strong> ${feedback.role}</p>
+                                <p><strong>Masukan:</strong> ${feedback.feedback}</p>
+                                <p><strong>Tanggal:</strong> ${feedback.created_at}</p>
+                            </div>`;
+                    });
+
+                    contentContainer.innerHTML = 
+                        `<div class="admin-section">
+                            <h2>Daftar Masukan</h2>
+                            <div class="admin-container">
+                                ${feedbackCards || '<p>Belum ada masukan yang diterima.</p>'}
+                            </div>
+                        </div>`;
+                } else {
+                    contentContainer.innerHTML = `<p>Gagal memuat data masukan.</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat data masukan.</p>`;
+            });
+    }
+
+    function renderConsultationPelangganPage() {
+        fetch('konsultasi_pelanggan.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.customers) {
+                    let customerCards = '';
+
+                    data.customers.forEach(customer => {
+                        const whatsappLink = `https://wa.me/${customer.contact}?text=Halo%20${encodeURIComponent(customer.fullName)},%20saya%20ingin%20melakukan%20konsultasi.`;
+
+                        customerCards += 
+                            `<div class="customer-card">
+                                <p><strong>Nama:</strong> ${customer.fullName}</p>
+                                <p><strong>Username:</strong> ${customer.username}</p>
+                                <p><strong>Email:</strong> ${customer.email}</p>
+                                <p><strong>Kontak:</strong> ${customer.contact}</p>
+                                <p><strong>Ditugaskan Pada:</strong> ${customer.assigned_at}</p>
+                                <button onclick="window.open('${whatsappLink}', '_blank')" class="whatsapp-button">
+                                    Hubungi ${customer.fullName}
+                                </button>
+                                <button onclick="viewClientSchedule(${customer.id})" class="action-btn">Lihat Jadwal Latihan</button>
+                            </div>`;
+                    });
+
+                    contentContainer.innerHTML = 
+                        `<div class="trainer-section">
+                            <h2>Konsultasi Pelanggan</h2>
+                            <div class="trainer-container">
+                                ${customerCards || '<p>Belum ada pelanggan yang terdaftar.</p>'}
+                            </div>
+                        </div>`;
+                } else {
+                    contentContainer.innerHTML = `<p>Gagal memuat data pelanggan.</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat data pelanggan.</p>`;
+            });
+    }
+
+    window.viewClientSchedule = function(clientId) {
+        navigate('client_schedule', { client_id: clientId });
+    };
+
+    function renderConsultationPage() {
+        const user = getLoggedInUser();
+        if (!user) {
+            showToast('Anda harus login terlebih dahulu untuk mengakses halaman ini.', 'warning'); // MODIFIED
+            navigate('home');
+            return;
+        }
+
+        if (user.trainer && user.trainer.id) {
+            contentContainer.innerHTML = 
+                `<div class="consultation-section">
+                    <h2>Konsultasi</h2>
+                    <p>Kami akan segera mengarahkan konsultasi ke trainer Anda:</p>
+                    <p><strong>${user.trainer.fullName}</strong></p>
+                    <button type="button" class="action-btn" onclick="redirectToConsultation()">Lanjutkan Konsultasi</button>
+                </div>`;
+        } else {
+            contentContainer.innerHTML = 
+                `<div class="consultation-section">
+                    <h2>Konsultasi</h2>
+                    <p>Anda belum memiliki trainer. Silakan pilih trainer terlebih dahulu.</p>
+                    <button type="button" class="action-btn" onclick="navigate('trainer')">Pilih Trainer Anda</button>
+                </div>`;
+        }
+    }
+
+    function renderPaymentPage() {
+        const user = getLoggedInUser();
+        if (!user || user.role !== 'Client' || !user.trainer) {
+            showToast('Anda harus login dan memilih trainer terlebih dahulu untuk mengakses halaman pembayaran.', 'warning'); // MODIFIED
+            navigate('home');
+            return;
+        }
+
+        contentContainer.innerHTML = 
+            `<div class="payment-section">
+                <div class="payment-container">
+                    <div class="header">
+                        <h1>Pembayaran QRIS</h1>
+                    </div>
+                    <div class="instruction">
+                        <p>Silakan scan QR code di bawah ini untuk melakukan pembayaran:</p>
+                    </div>
+                    <div class="qris-image">
+                        <img src="PIC/Qriss.png" alt="QRIS QR Code">
+                    </div>
+                    <div class="amount">
+                        <p>Jumlah Pembayaran: <strong>Rp100.000</strong></p>
+                    </div>
+                    <button class="confirm-btn" onclick="confirmPayment()">Konfirmasi Pembayaran</button>
+                </div>
+            </div>`;
+    }
+
+    function renderClientSchedulePage(clientId) {
+        const user = getLoggedInUser();
+        if (!user || user.role !== 'Trainer') {
+            contentContainer.innerHTML = `<p>Hanya trainer yang dapat mengakses halaman ini.</p>`;
+            return;
+        }
+
+        fetch(`get_trainer_schedule.php?client_id=${clientId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const schedules = data.schedules;
+                    if (schedules.length === 0) {
+                        contentContainer.innerHTML = `
+                            <div class="scheduleno-section">
+                                <h2>Jadwal Latihan Client</h2>
+                                <p>Client ini belum memiliki jadwal latihan, buat jadwal latihan sekarang.</p>
+                                <button class="action-btn" onclick="openAddModalClient(${clientId})">Tambah Jadwal</button>
+                            </div>`;
+                        return;
+                    }
+
+                    let scheduleHtml = `
+                        <div class="schedule-section">
+                            <h2>Jadwal Latihan Client</h2>
+                            <table class="schedule-table">
+                                <thead>
+                                    <tr>
+                                        <th>Hari</th>
+                                        <th>Waktu Mulai</th>
+                                        <th>Waktu Selesai</th>
+                                        <th>Aktivitas</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    schedules.forEach(sch => {
+                        scheduleHtml += `
+                            <tr>
+                                <td>${sch.day}</td>
+                                <td>${sch.time_start}</td>
+                                <td>${sch.time_end}</td>
+                                <td>${sch.activity}</td>
+                                <td>
+                                    <button class="edit-btn" onclick="openEditModal(${sch.id}, '${sch.day}', '${sch.time_start}', '${sch.time_end}', '${sch.activity}', ${clientId})">Edit</button>
+                                    <button class="delete-btn" onclick="hapusJadwal(${sch.id}, ${clientId})">Hapus</button>
+                                </td>
+                            </tr>`;
+                    });
+                    scheduleHtml += `
+                                </tbody>
+                            </table>
+                            <div class="button-center" style="margin-top:20px;">
+                                <button class="action-btn" onclick="openAddModalClient(${clientId})">Tambah Jadwal</button>
+                                <button class="action-btn" onclick="hapusSemuaJadwal(${clientId})">Hapus Semua Jadwal</button>
+                            </div>
+                        </div>`;
+                    contentContainer.innerHTML = scheduleHtml;
+                } else {
+                    contentContainer.innerHTML = `<p>Gagal memuat jadwal.</p>`;
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat jadwal.</p>`;
+            });
+    }
+
+
+
+    function renderSchedulePage() {
+        const user = getLoggedInUser();
+    
+        if (!user) {
+            contentContainer.innerHTML = `
+                <div>
+                    <h2>Jadwal Latihan</h2>
+                    <p>Anda harus login untuk melihat jadwal.</p>
+                </div>`;
+            return;
+        }
+        
+        if (user.role === 'Trainer') {
+            fetch("get_trainer_schedule.php")
+                .then(response => response.json())
+                .then(scheduleData => {
+                    if (scheduleData.success) {
+                        const schedules = scheduleData.schedules;
+                        if (schedules.length === 0) {
+                            contentContainer.innerHTML = `
+                                <div>
+                                    <h2>Jadwal Latihan (Semua Client)</h2>
+                                    <p>Belum ada jadwal sama sekali.</p>
+                                </div>`;
+                            return;
+                        }
+
+                        const schedulesByClient = {};
+                        schedules.forEach(sch => {
+                            if (!schedulesByClient[sch.client_id]) {
+                                schedulesByClient[sch.client_id] = {
+                                    clientName: sch.client_name,
+                                    schedules: []
+                                };
+                            }
+                            schedulesByClient[sch.client_id].schedules.push(sch);
+                        });
+
+                        let scheduleHtml = `<div class="schedule-section"><h2>Jadwal Latihan Seluruh Client</h2>`;
+                        for (const cid in schedulesByClient) {
+                            const cl = schedulesByClient[cid];
+                            scheduleHtml += `<div class="client-schedule-group">
+                                <h3>${cl.clientName}</h3>
+                                <table class="schedule-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hari</th>
+                                            <th>Waktu Mulai</th>
+                                            <th>Waktu Selesai</th>
+                                            <th>Aktivitas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                            cl.schedules.forEach(sch => {
+                                scheduleHtml += `
+                                    <tr>
+                                        <td>${sch.day}</td>
+                                        <td>${sch.time_start}</td>
+                                        <td>${sch.time_end}</td>
+                                        <td>${sch.activity}</td>
+                                    </tr>`;
+                            });
+                            scheduleHtml += `</tbody></table></div>`;
+                        }
+                        scheduleHtml += `</div>`;
+                        contentContainer.innerHTML = scheduleHtml;
+
+                    } else {
+                        contentContainer.innerHTML = `<p>Gagal memuat jadwal.</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error(error);
+                    contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat jadwal.</p>`;
+                });
+        } else if (user.role === 'Client') {
+            fetch("get_trainer_schedule.php")
+                .then(response => response.json())
+                .then(data => {
+                    const user = getLoggedInUser();
+                    if (data.success) {
+                        const schedules = data.schedules;
+                        if (schedules.length === 0) {
+                            if (user && user.trainer && user.trainer.fullName) {
+                                contentContainer.innerHTML = `
+                                    <div class="scheduleno2-section">
+                                        <h2>Jadwal Latihan</h2>
+                                        <p>Anda belum memiliki jadwal latihan, silakan hubungi trainer anda untuk menambahkan jadwal latihan.</p>
+                                        <button class="action-btn" onclick="contactTrainer('${user.trainer.fullName}')">Hubungi Trainer (${user.trainer.fullName})</button>
+                                    </div>`;
+                            } else {
+                                contentContainer.innerHTML = `
+                                    <div class="scheduleno2-section">
+                                        <h2>Jadwal Latihan</h2>
+                                        <p>Anda belum memiliki trainer atau trainer Anda belum menambahkan jadwal.</p>
+                                        <button class="action-btn" onclick="navigate('trainer')">Pilih Trainer Anda</button>
+                                    </div>`;
+                            }
+                            return;
+                        }
+
+                        let scheduleHtml = `
+                            <div class="schedule-section">
+                                <h2>Jadwal Latihan Dari Trainer Anda</h2>
+                                <table class="schedule-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hari</th>
+                                            <th>Waktu Mulai</th>
+                                            <th>Waktu Selesai</th>
+                                            <th>Aktivitas</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+
+                        schedules.forEach(sch => {
+                            scheduleHtml += `
+                                <tr>
+                                    <td>${sch.day}</td>
+                                    <td>${sch.time_start}</td>
+                                    <td>${sch.time_end}</td>
+                                    <td>${sch.activity}</td>
+                                </tr>`;
+                        });
+                        scheduleHtml += `</tbody></table></div>`;
+                        contentContainer.innerHTML = scheduleHtml;
+                    } else {
+                        contentContainer.innerHTML = `<p>${data.message || 'Gagal memuat jadwal.'}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error(error);
+                    contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat jadwal.</p>`;
+                });
+        } else {
+            contentContainer.innerHTML = `<p>Tidak ada jadwal yang dapat ditampilkan untuk peran Anda.</p>`;
+        }
+    }
+
+    window.contactTrainer = function(trainerName) {
+        const user = getLoggedInUser();
+        if (user && user.trainer && user.trainer.id) {
+            fetch('get_users.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.users) {
+                        const trainer = data.users.find(u => u.id === user.trainer.id && u.role === 'Trainer');
+                        if (trainer && trainer.contact) {
+                            window.open(`https://wa.me/${trainer.contact}`, '_blank');
+                        } else {
+                            showToast('Kontak trainer tidak ditemukan.', 'danger'); // MODIFIED
+                        }
+                    } else {
+                        showToast('Gagal mendapatkan data trainer.', 'danger'); // MODIFIED
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Terjadi kesalahan saat mendapatkan data trainer.', 'danger'); // MODIFIED
+                });
+        } else {
+            showToast('Anda belum memiliki trainer.', 'warning'); // MODIFIED
+        }
+    };
+
+    // HAPUS FUNGSI renderTrainerSchedule() YANG LAMA DAN GANTI DENGAN INI
+function renderTrainerSchedule(){
+         contentContainer.innerHTML = `
+                <div>
+                    <h2>Jadwal Trainer</h2>
+                </div>`;
+            return;
+    }
+// FUNGSI BARU UNTUK TAMPILAN MANAJEMEN TRAINER
+function renderTrainerManageView(schedules) {
+    let scheduleHtml = `
+        <div class="schedule-section">
+            <h2>Kelola Jadwal Ketersediaan Anda</h2>`;
+
+    if (!schedules || schedules.length === 0) {
+        scheduleHtml += `<p>Anda belum menambahkan jadwal ketersediaan. Silakan tambahkan.</p>`;
+    } else {
+        scheduleHtml += `
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Hari</th>
+                        <th>Waktu Mulai</th>
+                        <th>Waktu Selesai</th>
+                        <th>Deskripsi</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        schedules.forEach(sch => {
+            scheduleHtml += `
+                <tr>
+                    <td>${sch.day}</td>
+                    <td>${sch.time_start || '-'}</td>
+                    <td>${sch.time_end || '-'}</td>
+                    <td>${sch.description || '-'}</td>
+                    <td>
+                        <button class="edit-btn" onclick="openEditTrainerAvailabilityModal(${sch.id}, '${sch.time_start || ''}', '${sch.time_end || ''}', '${sch.description || ''}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteTrainerAvailability(${sch.id})">Hapus</button>
+                    </td>
+                </tr>`;
+        });
+        scheduleHtml += `</tbody></table>`;
+    }
+
+    scheduleHtml += `
+        <div class="button-center" style="margin-top:20px;">
+            <button class="action-btn" onclick="openAddTrainerAvailabilityModal()">Tambah Jadwal</button>
+        </div></div>`;
+    contentContainer.innerHTML = scheduleHtml;
+}
+
+// FUNGSI BARU UNTUK TAMPILAN CLIENT
+function renderClientView(schedules) {
+    let scheduleHtml = `<div class="schedule-section"><h2>Jadwal Ketersediaan Trainer</h2>`;
+
+    if (Object.keys(schedules).length === 0) {
+        scheduleHtml += `<p>Saat ini belum ada trainer yang mempublikasikan jadwalnya.</p>`;
+    } else {
+        for (const trainerName in schedules) {
+            const trainerSchedules = schedules[trainerName];
+            scheduleHtml += `<div class="trainer-schedule-group">
+                <h3>${trainerName}</h3>
+                <table class="schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Hari</th>
+                            <th>Waktu Mulai</th>
+                            <th>Waktu Selesai</th>
+                            <th>Deskripsi</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+            trainerSchedules.forEach(sch => {
+                scheduleHtml += `
+                    <tr>
+                        <td>${sch.day}</td>
+                        <td>${sch.time_start || 'Fleksibel'}</td>
+                        <td>${sch.time_end || ''}</td>
+                        <td>${sch.description || '-'}</td>
+                    </tr>`;
+            });
+            scheduleHtml += `</tbody></table></div>`;
+        }
+    }
+
+    scheduleHtml += `</div>`;
+    contentContainer.innerHTML = scheduleHtml;
+}
+    // Fungsi untuk Render Halaman Tentang
+    function renderAboutPage() {
+        contentContainer.innerHTML = 
+            `<div class="about-contact-feedback-section">
+                <div class="about-section">
+                    <img src="PIC/us.png" alt="Tentang Kami" class="about-image">
+                    <h2>Tentang TrainUp</h2>
+                    <p>Kami percaya bahwa kebugaran adalah hak setiap orang, dan kami berkomitmen untuk menyediakan layanan terbaik
+                       dengan pendekatan yang ramah dan profesional. Bergabunglah bersama kami di TrainUp, dan capai versi terbaik 
+                       dari diri Anda!</p>
+                    <p>TrainUp berdiri dengan tujuan membantu masyarakat mencapai kebugaran dan kesehatan melalui layanan
+                       pelatihan yang profesional dan terjangkau. Tim kami terdiri dari trainer yang berpengalaman dan berdedikasi 
+                       untuk mendampingi Anda dalam setiap langkah perjalanan fitness Anda.</p>
+                </div>
+
+                <div class="contact-feedback-section">
+                    <h2>Kontak TrainUp</h2>
+                    <div class="contact-info">
+                        <div class="contact-item">
+                            <img src="PIC/ig.png" alt="Instagram Logo" class="contact-logo">
+                            <a href="https://instagram.com/TrainUpCompUA" target="_blank">@TrainUpCompUA</a>
+                        </div>
+                        <div class="contact-item">
+                            <img src="PIC/email.png" alt="Email Logo" class="contact-logo">
+                            <a href="mailto:trainupcompua@gmail.com">trainupcompua@gmail.com</a>
+                        </div>
+                    </div>
+
+                    <h2>Saran dan Kritik</h2>
+                    <div class="feedback-form">
+                        <form id="feedbackForm" onsubmit="return submitFeedback(event)">
+                            <label for="feedback">Masukkan Saran atau Kritik Anda:</label>
+                            <textarea id="feedback" name="feedback" rows="5" placeholder="Tulis saran atau kritik Anda di sini..." required></textarea>
+                            <button type="submit" class="submit-btn">Kirim</button>
+                        </form>
+                    </div>
+                </div>
+            </div>`
+        ;
+    }
+
+    function renderAdminPage() {
+        const user = getLoggedInUser();
+        if (!user || user.role !== 'Admin') {
+            contentContainer.innerHTML = `<p>Anda tidak memiliki akses ke halaman ini.</p>`;
+            return;
+        }
+
+        fetch('get_users.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.users) {
+                    const clients = data.users.filter(u => u.role === 'Client');
+                    const trainers = data.users.filter(u => u.role === 'Trainer');
+                    const admins = data.users.filter(u => u.role === 'Admin');
+
+                    contentContainer.innerHTML = 
+                        `<div class="admin-section">
+                            <h2>Admin Panel</h2>
+
+                            <h3>Clients</h3>
+                            <div class="admin-container">
+                                ${clients.map(client => 
+                                    `<div class="admin-card">
+                                        <p><strong>Nama:</strong> ${client.fullName}</p>
+                                        <p><strong>Username:</strong> ${client.username}</p>
+                                        <p><strong>Email:</strong> ${client.email}</p>
+                                        <p><strong>Kontak:</strong> ${client.contact}</p>
+                                        <p><strong>Program Capaian:</strong> ${client.programGoals}</p>
+                                        <p><strong>Riwayat Penyakit:</strong> ${client.medicalHistory}</p>
+                                        <p><strong>Trainer:</strong> ${client.trainer ? client.trainer.fullName : 'Belum memilih trainer'}</p>
+                                    </div>`
+                                ).join('') || '<p>Belum ada client yang terdaftar.</p>'}
+                            </div>
+
+                            <h3>Trainers</h3>
+                            <div class="admin-container">
+                                ${trainers.map(trainer => 
+                                    `<div class="admin-card">
+                                        <p><strong>Nama:</strong> ${trainer.fullName}</p>
+                                        <p><strong>Username:</strong> ${trainer.username}</p>
+                                        <p><strong>Email:</strong> ${trainer.email}</p>
+                                        <p><strong>Kontak:</strong> ${trainer.contact}</p>
+                                        <p><strong>Spesialisasi:</strong> ${trainer.specialization}</p>
+                                        <p><strong>Pengalaman:</strong> ${trainer.experience} tahun</p>
+                                        <p><strong>Deskripsi:</strong> ${trainer.description}</p>
+                                    </div>`
+                                ).join('') || '<p>Belum ada trainer yang terdaftar.</p>'}
+                            </div>
+
+                            <h3>Admins</h3>
+                            <div class="admin-container">
+                                ${admins.map(admin => 
+                                    `<div class="admin-card">
+                                        <p><strong>Nama:</strong> ${admin.fullName}</p>
+                                        <p><strong>Username:</strong> ${admin.username}</p>
+                                        <p><strong>Email:</strong> ${admin.email}</p>
+                                        <p><strong>Kontak:</strong> ${admin.contact}</p>
+                                        <p><strong>Program Capaian:</strong> ${admin.programGoals}</p>
+                                        <p><strong>Riwayat Penyakit:</strong> ${admin.medicalHistory}</p>
+                                        <p><strong>Trainer:</strong> ${admin.trainer ? admin.trainer.fullName : 'Belum memilih trainer'}</p>
+                                    </div>`
+                                ).join('') || '<p>Belum ada admin yang terdaftar.</p>'}
+                            </div>
+                        </div>`;
+                } else {
+                    contentContainer.innerHTML = `<p>Gagal memuat data admin.</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentContainer.innerHTML = `<p>Terjadi kesalahan saat memuat data admin.</p>`;
+            });
+    }
+
+    window.confirmPayment = function () {
+        const user = getLoggedInUser();
+        if (user && user.role === 'Client' && user.trainer) {
+            showToast('Pembayaran berhasil dikonfirmasi! Trainer telah dipilih.', 'success'); // MODIFIED
+            navigate('home');
+        } else {
+            showToast('Terjadi kesalahan saat mengonfirmasi pembayaran.', 'danger'); // MODIFIED
+        }
+    };
+
+    window.openEditModal = function(id, day, time_start, time_end, activity, clientId = null) {
+        // Hapus modal edit yang sudah ada (jika ada)
+        const existingModal = document.getElementById('editModal');
+        if (existingModal) existingModal.remove();
+    
+        const editModalHtml = `
+            <div class="modal" id="editModal">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditModal()">&times;</span>
+        <div class="modal-header">
+            <h2>Edit Jadwal</h2>
+        </div>
+        <div class="modal-body">
+            <form onsubmit="return submitEditSchedule(event, ${id}, ${clientId})">
+                <label>Hari: ${day}</label><br><br>
+                <label>Waktu Mulai (Opsional)</label>
+                <input type="time" id="editTimeStart" value="${time_start || ''}"><br>
+                
+                <label>Waktu Selesai (Opsional)</label>
+                <input type="time" id="editTimeEnd" value="${time_end || ''}"><br>
+                
+                <label>Kegiatan</label>
+                <input type="text" id="editActivity" value="${activity || ''}" required><br><br>
+
+                <button type="submit" class="submit-btn">Simpan Perubahan</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+        `;
+    
+        // Sisipkan modal ke dalam body
+        document.body.insertAdjacentHTML('beforeend', editModalHtml);
+        const modal = document.getElementById('editModal');
+        // Tampilkan modal
+        modal.style.display = 'flex';
+    };
+    
+    // Fungsi untuk menutup modal
+    window.closeEditModal = function() {
+        const modal = document.getElementById('editModal');
+        if (modal) modal.remove();
+    };
+    
+
+    window.submitEditSchedule = function(event, id, clientId) {
+        event.preventDefault();
+        const time_start = document.getElementById('editTimeStart').value;
+        const time_end = document.getElementById('editTimeEnd').value;
+        const activity = document.getElementById('editActivity').value;
+
+        fetch('edit_trainer_schedule.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, day: null, time_start, time_end, activity })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Jadwal berhasil diubah.', 'success'); // MODIFIED
+                closeEditModal();
+                if (clientId) {
+                    renderClientSchedulePage(clientId);
+                } else {
+                    renderSchedulePage();
+                }
+            } else {
+                showToast('Gagal mengubah jadwal: ' + data.message, 'danger'); // MODIFIED
+            }
+        })
+        .catch(error => {
+            console.error(error);
+            showToast('Terjadi kesalahan saat mengubah jadwal.', 'danger'); // MODIFIED
+        });
+
+        return false;
+    };
+
+    const daysOfWeek = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+
+    window.openAddModalClient = function (clientId) {
+        if (document.getElementById("addModal")) {
+            document.getElementById("addModal").remove();
+        }
+
+        let rows = '';
+        daysOfWeek.forEach(day => {
+            rows += `
+                <tr>
+                    <td><input type="checkbox" class="day-check" data-day="${day}"></td>
+                    <td>${day}</td>
+                    <td>
+                        <input type="time" class="time-start" disabled>
+                        -
+                        <input type="time" class="time-end" disabled>
+                    </td>
+                    <td><input type="text" class="activity" placeholder="Aktivitas" disabled></td>
+                </tr>
+            `;
+        });
+
+        const addModal = document.createElement("div");
+        addModal.id = "addModal";
+        addModal.className = "modal";
+        addModal.innerHTML = 
+            `<div class="modal-content">
+                <span class="close" onclick="closeAddModal()">&times;</span>
+                <div class="modal-header">
+                    <h2>Tambah Jadwal Latihan</h2>
+                    <p>Pilih hari yang ingin ditambahkan jadwalnya. Anda dapat memilih beberapa hari sekaligus.</p>
+                </div>
+                <div class="modal-body">
+                    <form id="addForm" onsubmit="return submitAddClient(event, ${clientId})">
+                        <table class="schedule-template-table">
+                            <thead>
+                                <tr>
+                                    <th>Pilih</th>
+                                    <th>Hari</th>
+                                    <th>Waktu</th>
+                                    <th>Aktivitas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                        <button type="submit" class="submit-btn">Tambahkan Jadwal</button>
+                    </form>
+                </div>
+            </div>`;
+        document.body.appendChild(addModal);
+        addModal.style.display = "flex";
+
+        document.querySelectorAll('#addModal .day-check').forEach(check => {
+            check.addEventListener('change', (e) => {
+                const row = e.target.closest('tr');
+                const timeStart = row.querySelector('.time-start');
+                const timeEnd = row.querySelector('.time-end');
+                const activity = row.querySelector('.activity');
+
+                if (e.target.checked) {
+                    timeStart.disabled = false;
+                    timeEnd.disabled = false;
+                    activity.disabled = false;
+                } else {
+                    timeStart.disabled = true;
+                    timeEnd.disabled = true;
+                    activity.disabled = true;
+                    timeStart.value = '';
+                    timeEnd.value = '';
+                    activity.value = '';
+                }
+            });
+        });
+    };
+
+    window.closeAddModal = function () {
+        const addModal = document.getElementById("addModal");
+        if (addModal) {
+            addModal.style.display = "none";
+        }
+    };
+
+    window.submitAddClient = function (event, clientId) {
+        event.preventDefault();
+        const user = getLoggedInUser();
+        if (!user || user.role !== 'Trainer') {
+            showToast('Hanya trainer yang dapat menambahkan jadwal.', 'danger'); // MODIFIED
+            return false;
+        }
+
+        const rows = document.querySelectorAll('#addModal .schedule-template-table tbody tr');
+        const promises = [];
+
+        rows.forEach(row => {
+            const check = row.querySelector('.day-check');
+            if (check.checked) {
+                const day = check.getAttribute('data-day');
+                const time_start = row.querySelector('.time-start').value.trim();
+                const time_end = row.querySelector('.time-end').value.trim();
+                const activity = row.querySelector('.activity').value.trim();
+
+                const promise = fetch('add_trainer_schedule.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ client_id: clientId, day, time_start, time_end, activity })
+                })
+                .then(response => response.json());
+
+                promises.push(promise);
+            }
+        });
+
+        if (promises.length === 0) {
+            showToast('Tidak ada hari yang dipilih atau data belum lengkap.', 'warning'); // MODIFIED
+            return false;
+        }
+
+        Promise.all(promises)
+.then(results => {
+    const failed = results.find(r => !r.success);
+    closeAddModal(); // Tutup modal dulu
+    if (!failed) {
+        showToast('Jadwal berhasil ditambahkan. Memuat ulang...', 'success');
+        // Beri jeda sebelum merender ulang
+        setTimeout(() => {
+            renderClientSchedulePage(clientId); 
+        }, 1500); // Jeda 1.5 detik
+    } else {
+        showToast('Beberapa jadwal gagal ditambahkan. Periksa kembali data Anda.', 'danger');
+        // Mungkin tidak perlu render ulang jika gagal
+    }
+})
+        .catch(error => {
+            console.error(error);
+            showToast('Terjadi kesalahan saat menambahkan jadwal.', 'danger'); // MODIFIED
+        });
+
+        return false;
+    };
+
+    window.handleConsultation = function () {
+        navigate('consultation');
+    };
+
+    window.redirectToConsultation = function () {
+        const user = getLoggedInUser();
+        if (user && user.trainer) {
+            fetch('get_users.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.users) {
+                        const trainer = data.users.find(u => u.id === user.trainer.id && u.role === 'Trainer');
+                        if (trainer && trainer.contact) {
+                            window.open(`https://wa.me/${trainer.contact}`, '_blank');
+                            navigate('home');
+                        } else {
+                            showToast('Kontak trainer tidak ditemukan.', 'danger'); // MODIFIED
+                        }
+                    } else {
+                        showToast('Gagal mendapatkan data trainer.', 'danger'); // MODIFIED
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Terjadi kesalahan saat mendapatkan data trainer.', 'danger'); // MODIFIED
+                });
+        } else {
+            showToast('Anda belum memiliki trainer.', 'warning'); // MODIFIED
+        }
+    };
+
+    window.toggleSidebar = function () {
+        const sidebar = document.getElementById('sidebarDashboard');
+        const container = document.querySelector('.container');
+        if (sidebar) {
+            sidebar.classList.toggle('active');
+            container.classList.toggle('shifted');
+            if (sidebar.classList.contains('active')) {
+                populateDashboard();
+            }
+        }
+    };
+
+    window.updateDashboard = function (event) {
+        event.preventDefault();
+        const user = getLoggedInUser();
+        if (user) {
+            const contact = document.getElementById('dashboardContact').value.trim();
+            const programGoals = document.getElementById('dashboardProgramGoals').value.trim();
+            const medicalHistory = document.getElementById('dashboardMedicalHistory').value.trim();
+            const description = document.getElementById('trainerDescription') ? document.getElementById('trainerDescription').value.trim() : null;
+
+            user.contact = contact;
+            user.programGoals = programGoals;
+            user.medicalHistory = medicalHistory;
+
+            if (user.role === 'Trainer') {
+                user.description = description;
+            }
+
+            sessionStorage.setItem('user', encryptData(user));
+
+            fetch('update_user.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(user)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('Informasi berhasil diperbarui!', 'success'); // MODIFIED
+                    renderNavbar();
+                    toggleSidebar();
+                    navigate('home');
+                } else {
+                    showToast(`Gagal memperbarui informasi: ${result.message}`, 'danger'); // MODIFIED
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Terjadi kesalahan saat memperbarui informasi.', 'danger'); // MODIFIED
+            });
+        }
+    };
+
+    function populateDashboard() {
+        const user = getLoggedInUser();
+        if (user) {
+            document.getElementById('dashboardFullName').value = user.fullName;
+            document.getElementById('dashboardUsername').value = user.username;
+            document.getElementById('dashboardGender').value = user.gender;
+            document.getElementById('dashboardEmail').value = user.email;
+            document.getElementById('dashboardContact').value = user.contact;
+            document.getElementById('dashboardProgramGoals').value = user.programGoals;
+            document.getElementById('dashboardMedicalHistory').value = user.medicalHistory;
+
+            if (user.role === 'Trainer') {
+                document.getElementById('trainerSection').innerHTML = 
+                    `<p>Deskripsi Trainer Anda:</p>
+                    <textarea id="trainerDescription" name="description" rows="4" required>${user.description || 'Deskripsi Trainer Anda belum diisi.'}</textarea>`;
+            } else if (user.role === 'Client') {
+                if (user.trainer && user.trainer.fullName) {
+                    document.getElementById('trainerSection').innerHTML = 
+                        `<p>Trainer Anda Sekarang: ${user.trainer.fullName}</p>
+                        <button type="button" class="btn-update" onclick="handleConsultation()">Konsultasi Sekarang</button>
+                        <button type="button" class="btn-update" onclick="removeTrainer()">Hapus Trainer</button>`;
+                } else {
+                    document.getElementById('trainerSection').innerHTML = 
+                        `<p>Anda belum memiliki trainer.</p>
+                        <button type="button" class="btn-update" onclick="navigate('trainer')">Pilih Trainer Anda</button>`;
+                }
+            }
+        }
+    }
+
+    window.submitFeedback = function (event) {
+        event.preventDefault();
+        const feedback = document.getElementById("feedback").value.trim();
+
+        fetch('save_feedback.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `feedback=${encodeURIComponent(feedback)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const feedbackSection = document.querySelector(".feedback-form");
+                feedbackSection.innerHTML = 
+                    `<div class="feedback-success">
+                        <p>Kritik dan Saran Anda telah berhasil dikirimkan. Terima kasih!</p>
+                    </div>`;
+            } else {
+                showToast(`Terjadi kesalahan saat mengirim feedback: ${data.message}`, 'danger'); // MODIFIED
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Terjadi kesalahan saat mengirim feedback. Silakan coba lagi.', 'danger'); // MODIFIED
+        });
+
+        return false;
+    };
+
+    window.onclick = function(event) {
+        const sidebar = document.getElementById("sidebarDashboard");
+        const profilBtn = document.querySelector('.profil-toggle-btn');
+        if (sidebar && !sidebar.contains(event.target) && event.target !== profilBtn && (!profilBtn || !profilBtn.contains(event.target))) {
+            sidebar.classList.remove('active');
+            document.querySelector('.container').classList.remove('shifted');
+        }
+    };
+
+    window.initiatePayment = function (trainerId, trainerName) {
+        const user = getLoggedInUser();
+        if (user && user.role === "Client") {
+            user.trainer = { id: trainerId, fullName: trainerName };
+            sessionStorage.setItem("user", encryptData(user));
+    
+            fetch("update_user.php", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ trainer_id: trainerId }),
+            })
+            .then((response) => response.json())
+            .then((result) => {
+                if (result.success) {
+                    navigate("payment");
+                } else {
+                    showToast(`Gagal memilih trainer: ${result.message}`, 'danger'); // MODIFIED
+                }
+            })
+            .catch((error) => {
+                console.error("Error:", error);
+                showToast("Terjadi kesalahan saat memilih trainer.", 'danger'); // MODIFIED
+            });
+        } else {
+            promptLogin();
+        }
+    };
+
+    function promptLogin() {
+        const shouldLogin = confirm("Anda belum login. Apakah Anda ingin login sekarang?");
+        if (shouldLogin) {
+            sessionStorage.setItem("redirectTo", "trainer");
+            window.location.href = "login.html";
+        }
+    }
+
+    window.removeTrainer = function() {
+        const user = getLoggedInUser();
+        if (user && user.role === 'Client' && user.trainer) {
+            if (confirm(`Apakah Anda yakin ingin menghapus trainer: ${user.trainer.fullName}?`)) {
+                user.trainer = null;
+                sessionStorage.setItem('user', encryptData(user));
+
+                fetch('update_user.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ trainer_id: null })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        showToast('Trainer berhasil dihapus.', 'success'); // MODIFIED
+                        renderNavbar();
+                        toggleSidebar();
+                        navigate('home');
+                    } else {
+                        showToast(`Gagal menghapus trainer: ${result.message}`, 'danger'); // MODIFIED
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Terjadi kesalahan saat menghapus trainer.', 'danger'); // MODIFIED
+                });
+            }
+        } else {
+            showToast('Anda tidak memiliki trainer yang dapat dihapus.', 'warning'); // MODIFIED
+        }
+    };
+
+    // Fungsi Hapus Jadwal
+    window.hapusJadwal = function (scheduleId, clientId) {
+        if(confirm('Apakah anda yakin ingin menghapus jadwal ini?')) {
+            fetch('hapus_jadwal.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ schedule_id: scheduleId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Jadwal berhasil dihapus.', 'success'); // MODIFIED
+                    renderClientSchedulePage(clientId);
+                } else {
+                    showToast('Gagal menghapus jadwal: ' + data.message, 'danger'); // MODIFIED
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                showToast('Terjadi kesalahan saat menghapus jadwal.', 'danger'); // MODIFIED
+            });
+        }
+    };
+
+    // Fungsi Hapus Semua Jadwal
+    window.hapusSemuaJadwal = function (clientId) {
+        if(confirm('Apakah anda yakin ingin menghapus semua jadwal untuk client ini?')) {
+            fetch('hapus_semua_jadwal.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ client_id: clientId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Semua jadwal berhasil dihapus.', 'success'); // MODIFIED
+                    renderClientSchedulePage(clientId);
+                } else {
+                    showToast('Gagal menghapus semua jadwal: ' + data.message, 'danger'); // MODIFIED
+                }
+            })
+            .catch(error => {
+                console.error(error);
+                showToast('Terjadi kesalahan saat menghapus semua jadwal.', 'danger'); // MODIFIED
+            });
+        }
+    };
+
+    verifySession().then(() => {
+        renderNavbar();
+        navigate("home");
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const navigateTarget = localStorage.getItem('navigate');
+        if (navigateTarget) {
+            navigate(navigateTarget);
+            localStorage.removeItem('navigate');
+        }
+    });
+
+    
+});
+
+// showToast: menampilkan Bootstrap Toast
+function showToast(message, type = 'success') {
+  const toastId = `toast-${Date.now()}`;
+  const toastHtml = `
+    <div id="${toastId}" class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">
+          ${message}
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>`;
+  const container = document.getElementById('toastContainer');
+  // Pastikan container ada sebelum menambahkan toast
+  if (container) {
+    container.insertAdjacentHTML('beforeend', toastHtml);
+    const toastEl = document.getElementById(toastId);
+    // Pastikan Bootstrap tersedia
+    if (typeof bootstrap !== 'undefined') {
+      const bsToast = new bootstrap.Toast(toastEl, { delay: 1000 });
+      bsToast.show();
+      // hapus elemen setelah tersembunyi
+      toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    } else {
+      console.error('Bootstrap is not loaded. Toast notification cannot be shown.');
+      // Fallback ke alert jika bootstrap tidak ada
+      alert(`${type.toUpperCase()}: ${message}`);
+    }
+  } else {
+    // Fallback jika container toast tidak ada
+    console.error('Toast container not found. Displaying as an alert.');
+    alert(`${type.toUpperCase()}: ${message}`);
+  }
+}
+
+const toastMessage = sessionStorage.getItem('toastMessage');
+    if (toastMessage) {
+        const toastType = sessionStorage.getItem('toastType') || 'success'; // Ambil tipe toast, default ke 'success'
+        showToast(toastMessage, toastType);
+        
+        // Hapus pesan dari session storage agar tidak muncul lagi saat refresh
+        sessionStorage.removeItem('toastMessage');
+        sessionStorage.removeItem('toastType');
+    }
+    // ==========================================================
+
+    const navbarContainer = document.getElementById("navbar-container");
+    const contentContainer = document.getElementById("content");
+    let currentClientId = null; // Untuk menyimpan client_id saat melihat jadwal khusus client
+
+styles.css
+(isi)
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Body Styling */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f2f2f2;
+    color: #333;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px !important;
+    background-color: #ffffff;
+    position: fixed;
+    top: 0;
+    width: 100%;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.navbar.scrolled {
+    background-color: #f8f8f8;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar .left-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.navbar .navbar-links {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+    justify-content: center;
+}
+
+.navbar a {
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.navbar a.active {
+    background-color: #4CAF50;
+    color: #ffffff;
+    border-color: #4CAF50;
+}
+
+.navbar a:hover {
+    background-color: #333;
+    color: #fff;
+    border-color: #333;
+}
+
+.navbar .right-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.Log-Out, .Login-Register {
+    padding: 8px 20px;
+    background-color: #4CAF50;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.Log-Out:hover, .Login-Register:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+    color: #ffffff !important;
+}
+
+.profil-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: #4CAF50;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    width: 120px;
+    height: 40px;
+    cursor: pointer;
+    z-index: 1003;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.profil-toggle-btn:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.gender-icon {
+    font-size: 1.2em;
+}
+
+.gender-icon.male::before {
+    content: "\2642";
+}
+
+.gender-icon.female::before {
+    content: "\2640";
+}
+
+/* Sidebar Dashboard Styling */
+.sidebar {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    width: 300px;
+    height: 100%;
+    background-color: #ffffff;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    padding: 20px;
+    z-index: 1002;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+}
+
+.sidebar.active {
+    transform: translateX(0);
+}
+
+.container.shifted {
+    transform: translateX(150px);
+    transition: transform 0.3s ease;
+}
+
+.sidebar h3 {
+    color: #4CAF50;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateX(-20px);
+    animation: fadeInSlide 0.5s forwards;
+}
+
+.sidebar .form-group {
+    margin-bottom: 15px;
+}
+
+.sidebar .form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.sidebar .form-group input,
+.sidebar .form-group select,
+.sidebar .form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    transition: border-color 0.3s ease;
+}
+
+.sidebar .form-group input:focus,
+.sidebar .form-group select:focus,
+.sidebar .form-group textarea:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.sidebar .btn-update {
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    width: 100%;
+}
+
+.sidebar .btn-update:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.sidebar .close-sidebar {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: #aaa;
+    transition: color 0.3s ease;
+}
+
+.sidebar .close-sidebar:hover {
+    color: #000;
+}
+
+/* Main Container */
+.container {
+    margin-top: 80px;
+    padding: 20px;
+    flex: 1;
+    width: 100%;
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+}
+
+/* Home Section Styling */
+.home-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    max-width: 1200px;
+    margin: 0 auto;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.text-overlay {
+    text-align: center;
+    font-size: 3em;
+    font-weight: bold;
+    font-family: sans-serif;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(-20px);
+    animation: fadeInDown 0.6s forwards;
+}
+
+.text-overlay .train {
+    color: #000000;
+}
+
+.text-overlay .up {
+    color: #90ee90;
+}
+
+.image-section img {
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+}
+
+.image-section img:hover {
+    transform: scale(1.02);
+}
+
+.gym-text {
+    margin-top: 20px;
+    font-size: 1.2em;
+    color: #555;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Program Section Styling */
+.program-section h2,
+.instructor-section h2,
+.benefits-section h2 {
+    font-size: 2.5em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.program-section ul,
+.benefits-section ul {
+    list-style-type: disc;
+    margin: 10px 0;
+    padding-left: 40px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.program-section li,
+.benefits-section li {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+
+.program-section,
+.benefits-section {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Instructor Section Styling */
+.instructor-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.instructor-section img {
+    width: 100%;
+    max-width: 800px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease;
+}
+
+.instructor-section img:hover {
+    transform: scale(1.02);
+}
+
+.instructor-section p {
+    font-size: 1.2em;
+    color: #333;
+    line-height: 1.8;
+    margin-bottom: 15px;
+    text-align: justify;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Centered Header */
+.centered-header {
+    text-align: center;
+    font-size: 1.5em;
+    color: #333;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Button Center */
+.button-center {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.action-btn {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.action-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Trainer Section Styling */
+.trainer-section, .trainer-chosen-section {
+    max-width: 1000px;
+    margin: 2em auto;
+    padding: 1em;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.trainer-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.trainer-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em;
+    border-bottom: 1px solid #ddd;
+    background: #fff;
+    border-radius: 8px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.trainer-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.trainer-details {
+    display: flex;
+    align-items: center;
+}
+
+.trainer-details img {
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    margin-right: 1em;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.trainer-details img:hover {
+    transform: scale(1.05);
+}
+
+.trainer-info h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.trainer-info p {
+    margin: 5px 0;
+    font-size: 1em;
+    color: #555;
+}
+
+.hire-btn, .action-btn {
+    padding: 0.5em 1em;
+    font-size: 1em;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    margin-right: 10px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.hire-btn:hover, .action-btn:hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+}
+
+/* Payment Section Styling */
+.payment-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.payment-container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.payment-container:hover {
+    transform: scale(1.02);
+}
+
+.payment-container .header h1 {
+    color: #4CAF50;
+    margin-bottom: 20px;
+}
+
+.payment-container .instruction p,
+.payment-container .amount p {
+    font-size: 1.2em;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.payment-container .qris-image img {
+    width: 100%;
+    max-width: 250px;
+    height: auto;
+    margin: 20px 0;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    transition: transform 0.3s ease;
+}
+
+.payment-container .qris-image img:hover {
+    transform: scale(1.05);
+}
+
+.confirm-btn {
+    background-color: #4CAF50;
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.confirm-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Schedule Section Styling */
+.schedule-section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.schedule-section h2 {
+    font-size: 2.5em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.schedule-table th,
+.schedule-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+}
+
+.schedule-table th {
+    background-color: #4CAF50;
+    color: #fff;
+}
+
+.edit-btn,
+.delete-btn {
+    padding: 5px 10px;
+    background-color: #4CAF50;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.edit-btn:hover,
+.delete-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Schedule Template Table */
+.schedule-template-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.schedule-template-table th,
+.schedule-template-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+}
+
+.schedule-template-table th {
+    background-color: #4CAF50;
+    color: #fff;
+}
+
+/* Customer Card */
+.customer-card {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: left;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.customer-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.customer-card p {
+    font-size: 1em;
+    color: #555;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.customer-card strong {
+    color: #4CAF50;
+}
+
+.whatsapp-button {
+    background-color: #25D366;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.whatsapp-button:hover {
+    background-color: #1ebe57;
+    transform: translateY(-2px);
+}
+
+/* No Schedule Sections */
+.scheduleno-section,
+.scheduleno2-section {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #ffffff !important;
+    padding: 40px !important;
+    border-radius: 15px !important;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important;
+    max-width: 600px !important;
+    margin: 0 auto !important;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.scheduleno-section h2,
+.scheduleno2-section h2 {
+    font-size: 2em !important;
+    color: #4CAF50 !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.scheduleno-section p,
+.scheduleno2-section p {
+    font-size: 1.2em !important;
+    color: #333 !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* About, Contact & Feedback */
+.about-contact-feedback-section {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    font-size: 1.2em;
+    color: #333;
+    line-height: 1.8;
+    margin-bottom: 40px;
+    text-align: justify;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 30px;
+    background: #ffffff;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    animation: fadeInUp 0.6s forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.about-section img.about-image {
+    display: block;
+    margin: 0 auto 40px auto;
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+}
+
+.about-section img.about-image:hover {
+    transform: scale(1.02);
+}
+
+.contact-feedback-section h2 {
+    font-size: 2em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.contact-info {
+    max-width: 1200px;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 30px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.contact-logo {
+    width: 30px;
+    height: 30px;
+}
+
+.feedback-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.feedback-form form {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.feedback-form label {
+    font-weight: bold;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.feedback-form textarea {
+    padding: 10px;
+    font-size: 1em;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    resize: vertical;
+    margin-bottom: 15px;
+    width: 100%;
+    transition: border-color 0.3s ease;
+}
+
+.feedback-form textarea:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.feedback-form .submit-btn {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    align-self: center;
+    width: 150px;
+}
+
+.feedback-form .submit-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.feedback-success {
+    font-size: 1.2em;
+    color: #4CAF50;
+    text-align: center;
+    padding: 20px;
+    background-color: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    border-radius: 5px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Modal Styling Tanpa Animasi dan Transisi */
+.modal {
+    display: none; /* Tetap tersembunyi secara default */
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    /* Hapus opacity dan transition */
+}
+
+.modal.active {
+    display: flex;
+    /* Tetap tanpa opacity */
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 10px;
+    position: relative;
+    /* Hapus transform dan transition */
+}
+
+
+.close {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+}
+
+.modal-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.modal-header h2 {
+    color: #4CAF50;
+}
+
+.modal-body label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.modal-body input,
+.modal-body select,
+.modal-body textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    transition: border-color 0.3s ease;
+}
+
+.modal-body input:focus,
+.modal-body select:focus,
+.modal-body textarea:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.modal-body .submit-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.modal-body .submit-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Specific Modal for Edit Schedule */
+#editModal .modal-content {
+    background-color: #fff !important;
+    border-radius: 10px !important;
+    padding: 20px !important;
+    max-width: 500px !important;
+}
+
+#editModal .modal-header h2 {
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+
+#editModal .modal-body label {
+    font-size: 1em;
+    color: #555;
+    font-weight: bold;
+}
+
+#editModal .modal-body input[type="time"],
+#editModal .modal-body input[type="text"] {
+    font-size: 1em;
+    color: #333;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+}
+
+#editModal .modal-body input[type="time"]:focus,
+#editModal .modal-body input[type="text"]:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+#editModal .modal-body .submit-btn {
+    font-size: 1em;
+    font-weight: bold;
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#editModal .modal-body .submit-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Specific Modal for Add Schedule */
+#addScheduleModal .modal-content {
+    background-color: #fff !important;
+    border-radius: 10px !important;
+    padding: 20px !important;
+    max-width: 500px !important;
+}
+
+#addScheduleModal .modal-header h2 {
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+
+#addScheduleModal .modal-body label {
+    font-size: 1em;
+    color: #555;
+    font-weight: bold;
+}
+
+#addScheduleModal .modal-body input[type="time"],
+#addScheduleModal .modal-body input[type="text"] {
+    font-size: 1em;
+    color: #333;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.3s ease;
+}
+
+#addScheduleModal .modal-body input[type="time"]:focus,
+#addScheduleModal .modal-body input[type="text"]:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+#addScheduleModal .modal-body .submit-btn {
+    font-size: 1em;
+    font-weight: bold;
+    background-color: #4CAF50;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#addScheduleModal .modal-body .submit-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Animasi Fade In */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInDown {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInSlide {
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Consultation Section Styling */
+.consultation-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    margin: 0 auto;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.consultation-section h2 {
+    font-size: 2em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.consultation-section p {
+    font-size: 1.2em;
+    color: #333;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.consultation-section .action-btn {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: #fff;
+    font-size: 1em;
+    text-decoration: none;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.consultation-section .action-btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+/* Content Animation */
+.content-animate {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInUp 0.5s forwards;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 20px 0;
+    background-color: #333;
+    color: #fff;
+    font-size: 0.9em;
+    transition: background-color 0.3s ease;
+}
+
+footer:hover {
+    background-color: #444;
+}
+
+/* Auth Container (Login & Register) */
+.auth-container {
+    max-width: 400px;
+    width: 100%;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin: 100px auto;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.auth-container h2 {
+    color: #4CAF50;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"],
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1em;
+    transition: border-color 0.3s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="email"]:focus,
+.form-group input[type="password"]:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #4CAF50;
+    outline: none;
+}
+
+.btn {
+    width: 100%;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1em;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    margin-top: 10px;
+}
+
+.btn:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+}
+
+.register-link,
+.login-link {
+    display: block;
+    margin-top: 15px;
+    color: #4CAF50;
+    font-weight: bold;
+    text-decoration: none;
+    transition: color 0.3s ease;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.register-link:hover,
+.login-link:hover {
+    color: #45a049;
+}
+
+/* Admin Section Styling */
+.admin-section {
+    padding: 20px;
+    margin-top: 20px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    max-width: 1200px;
+    margin: 20px auto;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.admin-section h2 {
+    font-size: 2em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.admin-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+}
+
+.admin-card {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 300px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    text-align: left;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.admin-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.admin-card p {
+    font-size: 1em;
+    color: #555;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.admin-card .hapus-btn {
+    background-color: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    font-size: 1em;
+    font-weight: bold;
+}
+
+.admin-card .hapus-btn:hover {
+    background-color: #c0392b;
+    transform: translateY(-2px);
+}
+
+/* Feedback List */
+.feedback-card {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    text-align: left;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.feedback-card p {
+    font-size: 1em;
+    color: #555;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+/* TrainUp Image Section */
+.trainup-image-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 30px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.trainup-image-section img {
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease;
+}
+
+.trainup-image-section img:hover {
+    transform: scale(1.02);
+}
+
+/* Row */
+.row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 1200px;
+    margin: 20px 0;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+/* Benefits Section Styling */
+.benefits-section {
+    width: 100%;
+    margin-bottom: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.benefits-section img {
+    width: 100%;
+    max-width: 800px; /* Sesuaikan ukuran gambar */
+    height: auto;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease;
+}
+
+.benefits-section img:hover {
+    transform: scale(1.02);
+}
+
+.benefits-section h2 {
+    font-size: 2.5em;
+    color: #4CAF50;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.benefits-section ul {
+    list-style-type: disc;
+    margin: 10px 0;
+    padding-left: 40px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.6s forwards;
+}
+
+.benefits-section li {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .navbar .navbar-links {
+        flex-direction: column;
+        width: 100%;
+        display: none;
+    }
+
+    .navbar .navbar-links.active {
+        display: flex;
+    }
+
+    .navbar a {
+        width: 100%;
+        text-align: left;
+    }
+
+    .navbar .right-section {
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 10px;
+    }
+
+    .navbar .right-section .Log-Out,
+    .navbar .right-section .Login-Register {
+        width: auto;
+    }
+
+    .home-section,
+    .trainer-container,
+    .payment-container,
+    .schedule-section,
+    .about-contact-feedback-section,
+    .program-section,
+    .instructor-section,
+    .benefits-section,
+    .contact-feedback-section {
+        padding: 10px;
+    }
+
+    .home-section .text-overlay {
+        font-size: 2.5em;
+    }
+
+    .gym-text p {
+        font-size: 1em;
+    }
+
+    .program-section h2,
+    .instructor-section h2,
+    .benefits-section h2,
+    .contact-feedback-section h2 {
+        font-size: 2em;
+    }
+
+    .trainer-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hire-btn,
+    .action-btn,
+    .edit-btn,
+    .delete-btn {
+        margin-top: 10px;
+        width: 100%;
+    }
+
+    .instructor-section img,
+    .benefits-section img,
+    .about-image {
+        max-width: 100%;
+    }
+
+    .sidebar {
+        width: 80%;
+    }
+
+    .profil-toggle-btn {
+        width: 80px;
+        height: 40px;
+        font-size: 0.9em;
+    }
+
+    .consultation-section {
+        padding: 20px;
+    }
+}
+
+/* Additional Animations for Elements */
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInDown {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInSlide {
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Body Styling */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f2f2f2;
+    color: #333;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background-color: #ffffff;
+    position: fixed !important;
+    top: 0;
+    width: 100%;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Hamburger button (default hidden) */
+.hamburger {
+    display: none;
+    background: none;
+    border: none;
+    font-size: 1.8em;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+/* Navbar links */
+.navbar .navbar-links {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+    justify-content: center;
+}
+
+.navbar a {
+    padding: 10px 20px;
+    font-size: 1em;
+    font-weight: bold;
+    color: #333;
+    text-decoration: none;
+    border: 2px solid transparent;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.navbar a.active {
+    background-color: #4CAF50;
+    color: #ffffff;
+    border-color: #4CAF50;
+}
+
+.navbar a:hover {
+    background-color: #333;
+    color: #fff;
+    border-color: #333;
+}
+
+.navbar .right-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.Log-Out, .Login-Register {
+    padding: 8px 20px;
+    background-color: #4CAF50;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.Log-Out:hover, .Login-Register:hover {
+    background-color: #45a049;
+    transform: translateY(-2px);
+    color: #ffffff !important;
+}
+
+/* Gender icon */
+.gender-icon {
+    font-size: 1.2em;
+}
+
+.gender-icon.male::before {
+    content: "\2642";
+}
+
+.gender-icon.female::before {
+    content: "\2640";
+}
+
+/* Sidebar, container, footer, dll tetap sama… */
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    /* Tampilkan tombol hamburger */
+    .hamburger {
+        display: block;
+    }
+
+    /* Navbar jadi satu baris, links disembunyikan */
+    .navbar {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .navbar .navbar-links {
+        flex-direction: column;
+        width: 100%;
+        display: none;
+    }
+
+    .navbar .navbar-links.active {
+        display: flex;
+    }
+
+    .navbar a {
+        width: 100%;
+        text-align: left;
+        padding: 12px 20px;
+    }
+
+    .navbar .right-section {
+        margin-top: 10px;
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+.profil-toggle-btn {
+  display: inline-flex;       /* fleksibel secara horizontal */
+  align-items: center;        /* ratakan vertikal */
+  justify-content: center;    /* ratakan horizontal */
+  gap: 0.5rem;                /* jarak antara ikon & teks */
+  padding: 0.5rem 1rem;       /* sesuaikan padding jika perlu */
+}
+
+.profil-toggle-btn .gender-icon {
+  /* jika ikon menggunakan pseudo-element atau font-icon, atur ukurannya */
+  font-size: 1.2em;
+  /* atau kalau pakai background-image: 
+  width: 1.2em; height: 1.2em; background-size: contain;
+  */
+}
+
+
+update_user.php
+(isi)
+<?php
+// update_user.php
+session_start();
+header('Content-Type: application/json');
+
+require 'db.php'; // Mengimpor koneksi database
+
+// Cek apakah pengguna sudah login
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'Anda harus login terlebih dahulu.']);
+    exit;
+}
+
+// Cek apakah permintaan adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+    exit;
+}
+
+// Ambil data JSON dari permintaan
+$input = json_decode(file_get_contents('php://input'), true);
+
+if (!$input) {
+    echo json_encode(['success' => false, 'message' => 'Invalid JSON data.']);
+    exit;
+}
+
+try {
+    // Ambil data pengguna yang sedang login
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_SESSION['user_id']]);
+    $user = $stmt->fetch();
+
+    if (!$user) {
+        echo json_encode(['success' => false, 'message' => 'Pengguna tidak ditemukan.']);
+        exit;
+    }
+
+    // Persiapkan data yang diperbarui
+    $fields_to_update = ['contact', 'programGoals', 'medicalHistory'];
+    $update_data = [];
+    $update_fields = [];
+
+    foreach ($fields_to_update as $field) {
+        if (isset($input[$field])) {
+            $update_fields[] = "$field = :$field";
+            $update_data[$field] = trim($input[$field]);
+        }
+    }
+
+    // Perbarui deskripsi jika pengguna adalah Trainer
+    if ($user['role'] === 'Trainer' && isset($input['description'])) {
+        $update_fields[] = "description = :description";
+        $update_data['description'] = trim($input['description']);
+    }
+
+    if (!empty($update_fields)) {
+        $sql = "UPDATE users SET " . implode(", ", $update_fields) . " WHERE id = :id";
+        $update_data['id'] = $_SESSION['user_id'];
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($update_data);
+    }
+
+    // Handle trainer assignment
+    if (array_key_exists('trainer_id', $input)) { // Changed to array_key_exists to allow null
+        $trainer_id = $input['trainer_id'] !== null ? intval($input['trainer_id']) : null;
+
+        if ($trainer_id !== null) {
+            // Cek apakah trainer valid
+            $stmt = $pdo->prepare("SELECT id FROM users WHERE id = :id AND role = 'Trainer'");
+            $stmt->execute(['id' => $trainer_id]);
+            if (!$stmt->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'Trainer tidak valid.']);
+                exit;
+            }
+        }
+
+        // Cek apakah sudah ada penugasan
+        $stmt = $pdo->prepare("SELECT id FROM user_trainers WHERE user_id = :user_id");
+        $stmt->execute(['user_id' => $_SESSION['user_id']]);
+        $assignment = $stmt->fetch();
+
+        if ($trainer_id !== null) {
+            if ($assignment) {
+                // Update penugasan yang sudah ada
+                $stmt = $pdo->prepare("UPDATE user_trainers SET trainer_id = :trainer_id, assigned_at = NOW() WHERE user_id = :user_id");
+                $stmt->execute([
+                    'trainer_id' => $trainer_id,
+                    'user_id' => $_SESSION['user_id']
+                ]);
+            } else {
+                // Insert penugasan baru
+                $stmt = $pdo->prepare("INSERT INTO user_trainers (user_id, trainer_id) VALUES (:user_id, :trainer_id)");
+                $stmt->execute([
+                    'user_id' => $_SESSION['user_id'],
+                    'trainer_id' => $trainer_id
+                ]);
+            }
+        } else {
+            if ($assignment) {
+                // Hapus penugasan yang ada
+                $stmt = $pdo->prepare("DELETE FROM user_trainers WHERE user_id = :user_id");
+                $stmt->execute(['user_id' => $_SESSION['user_id']]);
+            }
+        }
+    }
+
+    echo json_encode(['success' => true, 'message' => 'Informasi berhasil diperbarui.']);
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => 'Terjadi kesalahan saat memperbarui informasi.']);
+}
+?>
+

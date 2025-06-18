@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrainUp</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+    <link rel="icon" type="image/x-icon" href="PIC/favicon.png">
+    <link
+  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+  rel="stylesheet"
+  integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+</head>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"
+  integrity="sha384-oBqDVmMz9ATKxIep9tiCxS/Z9fNfEXiDAYTujMAeBAsjFuCZSmKbSSUnQlmh/jp3" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"
+  integrity="sha384-fbbOQedDUMZZ5KreZpsbe1LCZPVmfTnH7ois6mU1QK+m14rQ1l2bGBq41eYeM/fS" crossorigin="anonymous"></script>
+<body>
+    <div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
+
+    <div id="navbar-container"></div>
+
+    <div id="sidebarDashboard" class="sidebar">
+        <span class="close-sidebar" onclick="toggleSidebar()">&times;</span>
+        <h3>Dashboard</h3>
+<form id="dashboardForm" onsubmit="updateDashboard(event)">
+    <div class="form-group">
+        <label for="dashboardFullName">Nama Lengkap</label>
+        <input type="text" id="dashboardFullName" name="fullName" readonly>
+    </div>
+    <div class="form-group">
+        <label for="dashboardUsername">Username</label>
+        <input type="text" id="dashboardUsername" name="username" readonly>
+    </div>
+    <div class="form-group">
+        <label for="dashboardGender">Jenis Kelamin</label>
+        <input type="text" id="dashboardGender" name="gender" readonly>
+    </div>
+    <div class="form-group">
+        <label for="dashboardEmail">Email</label>
+        <input type="email" id="dashboardEmail" name="email" readonly>
+    </div>
+    <div class="form-group">
+        <label for="dashboardContact">Kontak</label>
+        <input type="text" id="dashboardContact" name="contact" required>
+    </div>
+    <div class="form-group" id="programGoalsGroup">
+        <label for="dashboardProgramGoals">Program Capaian</label>
+        <textarea id="dashboardProgramGoals" name="programGoals" required></textarea>
+    </div>
+    <div class="form-group">
+        <label for="dashboardMedicalHistory">Riwayat Penyakit</label>
+        <textarea id="dashboardMedicalHistory" name="medicalHistory"></textarea>
+    </div>
+    
+    <div id="trainerSection" class="form-group" style="display: none;">
+        <label for="trainerSelect">Pilih Trainer</label>
+        <select id="trainerSelect" name="trainer_id">
+            <option value="" disabled selected>Pilih Trainer</option>
+            <option value="null">Tidak ada Trainer</option> </select>
+    </div>
+
+    <div id="trainerDescriptionGroup" class="form-group" style="display: none;">
+        <label for="trainerDescription">Deskripsi Trainer</label>
+        <textarea id="trainerDescription" name="description" rows="4"></textarea>
+    </div>
+
+    <div id="profileImageGroup" class="form-group">
+        <label for="profile_image">Upload Foto Profil</label>
+        <input id="profile_image" type="file" name="profile_image" accept="image/*">
+        <div class="profile_image_exist">
+            <img src="" alt="Foto Profil" id="profile_image_exist" style="max-width: 150px; max-height: 150px; margin-top: 10px;">
+        </div>
+    </div>
+    
+    <button type="submit" class="btn-update">Perbarui Informasi</button>
+</form>
+    </div>
+
+    <div class="container">
+        <div id="content" class="content-animate">
+            </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 TrainUp. Semua hak dilindungi.</p>
+    </footer>
+    <script src="./script.js"></script>
+    <script>
+ 
+    </script>
+</body>
+</html>
